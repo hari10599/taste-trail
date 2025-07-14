@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { 
   Star, MapPin, Phone, Globe, Clock, DollarSign, 
   Wifi, Car, Trees, Music, Users, Loader2, 
-  MessageSquare, Heart, Share2
+  MessageSquare, Heart, Share2, Building
 } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -32,15 +32,29 @@ export default function RestaurantDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [user, setUser] = useState<any>(null)
   
   useEffect(() => {
     checkAuth()
     fetchRestaurant()
   }, [params.id])
   
-  const checkAuth = () => {
+  const checkAuth = async () => {
     const token = localStorage.getItem('accessToken')
     setIsAuthenticated(!!token)
+    
+    if (token) {
+      try {
+        const response = await axios.get('/api/auth/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        setUser(response.data.user)
+      } catch (error) {
+        console.error('Failed to fetch user:', error)
+      }
+    }
   }
   
   const fetchRestaurant = async () => {
@@ -53,6 +67,34 @@ export default function RestaurantDetailPage() {
       toast.error('Failed to load restaurant details')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleClaimRestaurant = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to claim this restaurant')
+      return
+    }
+
+    if (confirm('Are you sure you want to claim ownership of this restaurant?')) {
+      try {
+        const token = localStorage.getItem('accessToken')
+        const response = await axios.post(
+          '/api/owner/restaurants',
+          { restaurantId: restaurant.id },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+        toast.success('Restaurant claimed successfully!')
+        // Refresh the page to update the restaurant data
+        fetchRestaurant()
+        checkAuth() // Update user role
+      } catch (error: any) {
+        toast.error(error.response?.data?.error || 'Failed to claim restaurant')
+      }
     }
   }
   
@@ -106,6 +148,23 @@ export default function RestaurantDetailPage() {
             ) : (
               <Link href={`/login?redirect=/reviews/new?restaurant=${restaurant.id}`}>
                 <Button>Write a Review</Button>
+              </Link>
+            )}
+            {!restaurant.ownerId && user && user.role !== 'OWNER' && (
+              <Button 
+                variant="outline" 
+                onClick={handleClaimRestaurant}
+              >
+                <Building className="h-4 w-4 mr-2" />
+                Claim Restaurant
+              </Button>
+            )}
+            {restaurant.ownerId === user?.id && (
+              <Link href={`/owner/restaurants/${restaurant.id}`}>
+                <Button variant="outline">
+                  <Building className="h-4 w-4 mr-2" />
+                  Manage
+                </Button>
               </Link>
             )}
             <Button 

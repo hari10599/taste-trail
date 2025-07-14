@@ -31,6 +31,7 @@ interface Restaurant {
   reviewCount: number
   distance?: number
   openingHours?: any
+  hasInfluencerReview?: boolean
 }
 
 interface RestaurantMapProps {
@@ -54,11 +55,12 @@ function RestaurantMarker({ restaurant, onRestaurantClick }: {
     const L = typeof window !== 'undefined' ? require('leaflet') : null
     if (!L) return null
     const ratingDisplay = rating > 0 ? rating.toFixed(1) : '?'
+    const backgroundColor = '#FF6B6B' // Single red color for all restaurants
     const iconHtml = `
       <div style="
         width: 32px;
         height: 32px;
-        background: #FF6B6B;
+        background: ${backgroundColor};
         border-radius: 50%;
         display: flex;
         align-items: center;
@@ -186,11 +188,14 @@ export function RestaurantMap({
   const [mapCenter, setMapCenter] = useState<[number, number]>([center.lat, center.lng])
   const [mapZoom, setMapZoom] = useState(zoom)
   const [filters, setFilters] = useState({
-    radius: 10,
+    radius: 50, // Fixed radius of 50km
     category: '',
     minRating: 0,
-    maxPrice: 4
+    maxPrice: 4,
+    influencerOnly: false,
+    influencerId: ''
   })
+  const [influencers, setInfluencers] = useState<any[]>([])
 
   // Ensure we're on the client side before rendering the map
   useEffect(() => {
@@ -213,6 +218,21 @@ export function RestaurantMap({
     setMapRestaurants(restaurants)
   }, [restaurants])
 
+  // Fetch influencers
+  useEffect(() => {
+    const fetchInfluencers = async () => {
+      try {
+        const response = await axios.get('/api/influencers')
+        setInfluencers(response.data.influencers)
+      } catch (error) {
+        console.error('Failed to fetch influencers:', error)
+      }
+    }
+    if (showFilters) {
+      fetchInfluencers()
+    }
+  }, [showFilters])
+
   // Fetch nearby restaurants
   const fetchNearbyRestaurants = async (lat: number, lng: number) => {
     setLoading(true)
@@ -227,6 +247,8 @@ export function RestaurantMap({
       if (filters.category) params.append('category', filters.category)
       if (filters.minRating > 0) params.append('minRating', filters.minRating.toString())
       if (filters.maxPrice < 4) params.append('maxPrice', filters.maxPrice.toString())
+      if (filters.influencerOnly) params.append('influencerOnly', 'true')
+      if (filters.influencerId) params.append('influencerId', filters.influencerId)
 
       const response = await axios.get(`/api/restaurants/nearby?${params}`)
       setMapRestaurants(response.data.restaurants)
@@ -363,23 +385,12 @@ export function RestaurantMap({
         </div>
       )}
 
+
       {/* Filters */}
       {showFilters && (
-        <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-xs" style={{ zIndex: 1000 }}>
+        <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg w-80 max-h-[calc(100vh-120px)] overflow-y-auto" style={{ zIndex: 1000 }}>
           <h3 className="font-semibold mb-3">Filters</h3>
           <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Radius (km)</label>
-              <input
-                type="range"
-                min="1"
-                max="50"
-                value={filters.radius}
-                onChange={(e) => setFilters({ ...filters, radius: parseInt(e.target.value) })}
-                className="w-full mt-1"
-              />
-              <span className="text-xs text-gray-500">{filters.radius} km</span>
-            </div>
             <div>
               <label className="text-sm font-medium">Category</label>
               <select
@@ -423,18 +434,55 @@ export function RestaurantMap({
               />
               <span className="text-xs text-gray-500">{getPriceDisplay(filters.maxPrice)}</span>
             </div>
-            <Button
-              onClick={() => {
-                if (userLocation) {
-                  fetchNearbyRestaurants(userLocation.lat, userLocation.lng)
-                }
-              }}
-              className="w-full"
-              size="sm"
-              disabled={!userLocation}
-            >
-              Apply Filters
-            </Button>
+            <div>
+              <label className="text-sm font-medium">Filter by Influencer</label>
+              <select
+                value={filters.influencerId}
+                onChange={(e) => setFilters({ ...filters, influencerId: e.target.value })}
+                className="w-full mt-1 px-2 py-1 border rounded text-sm"
+              >
+                <option value="">All Influencers</option>
+                {influencers.map((influencer) => (
+                  <option key={influencer.id} value={influencer.id}>
+                    {influencer.name} ({influencer._count.reviews} reviews)
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Show restaurants reviewed by a specific influencer</p>
+            </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.influencerOnly}
+                  onChange={(e) => setFilters({ ...filters, influencerOnly: e.target.checked })}
+                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <span className="text-sm font-medium">Influencer Reviewed Only</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">Show only restaurants reviewed by any verified influencer</p>
+            </div>
+            <div className="pt-2 border-t">
+              <Button
+                onClick={() => {
+                  if (userLocation) {
+                    fetchNearbyRestaurants(userLocation.lat, userLocation.lng)
+                  } else {
+                    // Use default location if user location not available
+                    fetchNearbyRestaurants(37.7749, -122.4194)
+                  }
+                }}
+                className="w-full"
+                size="sm"
+              >
+                Apply Filters
+              </Button>
+              {!userLocation && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Click "Find Me" first or filters will use default location
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -455,7 +503,7 @@ export function RestaurantMap({
                 <div className="flex-1">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <h3 className="font-semibold text-lg">{selectedRestaurant.name}</h3>
+                      <h3 className="font-semibold text-lg mb-1">{selectedRestaurant.name}</h3>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
                         {selectedRestaurant.address}

@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Home, MapPin, Clock, User, LogOut, Menu, X, Star, Map } from 'lucide-react'
+import { Home, MapPin, Clock, User, LogOut, Menu, X, Star, Map, Building } from 'lucide-react'
 import { NotificationBell } from '@/components/NotificationBell'
+import { SearchInput } from '@/components/ui/search-input'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 
@@ -100,6 +101,12 @@ export default function MainLayout({
                     <span>Become Influencer</span>
                   </Link>
                 )}
+                {isAuthenticated && user?.role === 'OWNER' && (
+                  <Link href="/owner" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition">
+                    <Building className="h-4 w-4" />
+                    <span>Owner Dashboard</span>
+                  </Link>
+                )}
                 {isAuthenticated && (
                   <Link href="/profile" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition">
                     <User className="h-4 w-4" />
@@ -110,6 +117,7 @@ export default function MainLayout({
             </div>
             
             <div className="flex items-center space-x-4">
+              <SearchInput className="hidden md:block" />
               {isAuthenticated && user ? (
                 <div className="hidden md:flex items-center space-x-4">
                   <NotificationBell />
@@ -147,6 +155,9 @@ export default function MainLayout({
         {isMenuOpen && (
           <div className="md:hidden bg-white border-t">
             <div className="px-2 pt-2 pb-3 space-y-1">
+              <div className="px-3 py-2">
+                <SearchInput isMobile placeholder="Search Taste Trail..." />
+              </div>
               <Link href={isAuthenticated ? "/dashboard" : "/"} className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
                 Home
               </Link>
@@ -162,6 +173,11 @@ export default function MainLayout({
               {isAuthenticated && user?.role !== 'INFLUENCER' && (
                 <Link href="/influencer/apply" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
                   Become Influencer
+                </Link>
+              )}
+              {isAuthenticated && user?.role === 'OWNER' && (
+                <Link href="/owner" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
+                  Owner Dashboard
                 </Link>
               )}
               {isAuthenticated && user ? (

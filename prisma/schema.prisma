@@ -50,7 +50,9 @@ model Profile {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   location         String?
   phone            String?
+  bio              String?
   dietaryPrefs     String[]
+  cuisinePreferences String[] @default([])
   socialLinks      Json?    // For influencers
   followerCount    Int?     // For influencers
   verificationDocs String[] // For verification requests
@@ -79,6 +81,7 @@ model Restaurant {
   longitude    Float
   phone        String?
   website      String?
+  email        String?
   priceRange   Int      @default(2) // 1-4
   categories   String[]
   amenities    String[]
@@ -95,6 +98,7 @@ model Restaurant {
   
   @@index([name])
   @@index([categories])
+  @@index([ownerId])
 }
 
 model Review {
@@ -103,6 +107,7 @@ model Review {
   title         String?
   content       String
   images        String[]
+  dishes        String[]  @default([])
   visitDate     DateTime
   pricePerPerson Float?
   helpful       Int       @default(0)
@@ -207,4 +212,29 @@ model InfluencerApplication {
   
   @@index([status])
   @@index([submittedAt])
+}
+
+model RestaurantAnalytics {
+  id             String   @id @default(cuid())
+  restaurantId   String
+  date           DateTime @db.Date
+  views          Int      @default(0)
+  reviewCount    Int      @default(0)
+  avgRating      Float    @default(0)
+  totalLikes     Int      @default(0)
+  totalComments  Int      @default(0)
+  
+  @@unique([restaurantId, date])
+  @@index([restaurantId])
+  @@index([date])
+}
+
+model OwnerResponse {
+  id           String   @id @default(cuid())
+  reviewId     String   @unique
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([reviewId])
 }

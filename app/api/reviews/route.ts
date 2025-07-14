@@ -138,11 +138,22 @@ export async function POST(request: NextRequest) {
     const payload = verifyAccessToken(token)
     
     const body = await request.json()
-    const validatedData = createReviewSchema.parse(body)
+    
+    // Extract restaurantId separately as it's not part of the form schema
+    const { restaurantId, ...formData } = body
+    
+    if (!restaurantId) {
+      return NextResponse.json(
+        { error: 'Restaurant ID is required' },
+        { status: 400 }
+      )
+    }
+    
+    const validatedData = createReviewSchema.parse(formData)
     
     // Check if restaurant exists
     const restaurant = await prisma.restaurant.findUnique({
-      where: { id: validatedData.restaurantId },
+      where: { id: restaurantId },
     })
     
     if (!restaurant) {
@@ -156,7 +167,7 @@ export async function POST(request: NextRequest) {
     const existingReview = await prisma.review.findFirst({
       where: {
         userId: payload.userId,
-        restaurantId: validatedData.restaurantId,
+        restaurantId: restaurantId,
       },
     })
     
@@ -171,12 +182,13 @@ export async function POST(request: NextRequest) {
     const review = await prisma.review.create({
       data: {
         userId: payload.userId,
-        restaurantId: validatedData.restaurantId,
+        restaurantId: restaurantId,
         rating: validatedData.rating,
         title: validatedData.title,
         content: validatedData.content,
         visitDate: new Date(validatedData.visitDate),
         pricePerPerson: validatedData.pricePerPerson,
+        dishes: validatedData.dishes || [],
         images: validatedData.images || [],
       },
       include: {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { MapPin, List, Grid, Filter, Loader2 } from 'lucide-react'
+import { MapPin, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import axios from 'axios'
 
@@ -38,7 +38,7 @@ interface Restaurant {
 export default function MapPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map')
+  // Only map mode, no list mode
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null)
 
   useEffect(() => {
@@ -49,9 +49,16 @@ export default function MapPage() {
     try {
       // Fetch restaurants from San Francisco area by default
       const response = await axios.get('/api/restaurants/nearby?lat=37.7749&lng=-122.4194&radius=50&limit=100')
-      setRestaurants(response.data.restaurants)
+      setRestaurants(response.data.restaurants || [])
     } catch (error) {
       console.error('Failed to fetch restaurants:', error)
+      // Try fallback to regular restaurants endpoint
+      try {
+        const fallbackResponse = await axios.get('/api/restaurants?limit=100')
+        setRestaurants(fallbackResponse.data.restaurants || [])
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError)
+      }
     } finally {
       setLoading(false)
     }
@@ -59,7 +66,6 @@ export default function MapPage() {
 
   const handleRestaurantClick = (restaurant: Restaurant) => {
     setSelectedRestaurant(restaurant)
-    setViewMode('list')
   }
 
   const getPriceDisplay = (priceRange: number) => {
@@ -87,31 +93,12 @@ export default function MapPage() {
               <MapPin className="h-6 w-6 text-primary" />
               <h1 className="text-2xl font-bold text-gray-900">Restaurant Map</h1>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === 'map' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('map')}
-              >
-                <MapPin className="h-4 w-4 mr-1" />
-                Map
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-              >
-                <List className="h-4 w-4 mr-1" />
-                List
-              </Button>
-            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {viewMode === 'map' ? (
-          <div className="space-y-6">
+        <div className="space-y-6">
             {/* Map Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
@@ -187,91 +174,10 @@ export default function MapPage() {
                   <li>• Use the filters to narrow down your search</li>
                   <li>• Click on any marker to see restaurant details</li>
                   <li>• Use the navigation controls to zoom and pan</li>
-                  <li>• Switch to list view to see all restaurants</li>
                 </ul>
               </CardContent>
             </Card>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {/* List Header */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">
-                {restaurants.length} restaurants found
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setViewMode('map')}
-              >
-                <MapPin className="h-4 w-4 mr-1" />
-                Back to Map
-              </Button>
-            </div>
-
-            {/* Restaurant List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {restaurants.map((restaurant) => (
-                <Card key={restaurant.id} className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-0">
-                    {restaurant.coverImage && (
-                      <img
-                        src={restaurant.coverImage}
-                        alt={restaurant.name}
-                        className="w-full h-48 object-cover rounded-t-lg"
-                      />
-                    )}
-                    <div className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-lg">{restaurant.name}</h3>
-                        <span className="text-sm font-medium text-primary">
-                          {restaurant.avgRating > 0 ? `${restaurant.avgRating.toFixed(1)}★` : 'No rating'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{restaurant.address}</p>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-sm font-medium">{getPriceDisplay(restaurant.priceRange)}</span>
-                        <span className="text-gray-300">•</span>
-                        <span className="text-sm text-gray-600">{restaurant.categories[0]}</span>
-                        {restaurant.distance && (
-                          <>
-                            <span className="text-gray-300">•</span>
-                            <span className="text-sm text-gray-600">{restaurant.distance.toFixed(1)} km</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex flex-wrap gap-1 flex-1">
-                          {restaurant.categories.slice(0, 2).map((category) => (
-                            <span
-                              key={category}
-                              className="px-2 py-1 bg-gray-100 text-xs rounded-full"
-                            >
-                              {category}
-                            </span>
-                          ))}
-                        </div>
-                        <Link href={`/restaurants/${restaurant.id}`}>
-                          <Button size="sm">View</Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {restaurants.length === 0 && (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No restaurants found</h3>
-                  <p className="text-gray-600">Try adjusting your search criteria or location.</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )

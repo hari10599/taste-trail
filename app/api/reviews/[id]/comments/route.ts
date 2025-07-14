@@ -11,12 +11,13 @@ const createCommentSchema = z.object({
 // GET /api/reviews/[id]/comments - Get comments for a review
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const comments = await prisma.comment.findMany({
       where: { 
-        reviewId: params.id,
+        reviewId: id,
         parentId: null, // Only get top-level comments
       },
       include: {
@@ -58,9 +59,10 @@ export async function GET(
 // POST /api/reviews/[id]/comments - Create a comment
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -78,7 +80,7 @@ export async function POST(
     
     // Check if review exists
     const review = await prisma.review.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { 
         user: true,
         restaurant: {
@@ -102,7 +104,7 @@ export async function POST(
         where: { id: validatedData.parentId },
       })
       
-      if (!parentComment || parentComment.reviewId !== params.id) {
+      if (!parentComment || parentComment.reviewId !== id) {
         return NextResponse.json(
           { error: 'Parent comment not found' },
           { status: 404 }
@@ -117,7 +119,7 @@ export async function POST(
         data: {
           content: validatedData.content,
           userId: payload.userId,
-          reviewId: params.id,
+          reviewId: id,
           parentId: validatedData.parentId,
         },
         include: {

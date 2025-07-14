@@ -6,11 +6,12 @@ import { updateReviewSchema } from '@/lib/validations/review'
 // GET /api/reviews/[id] - Get a single review
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const review = await prisma.review.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         user: {
           select: {
@@ -43,8 +44,79 @@ export async function GET(
         { status: 404 }
       )
     }
+
+    // Check if review is hidden and user is not authorized to see it
+    if (review.isHidden) {
+      const authHeader = request.headers.get('authorization')
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.split(' ')[1]
+          const payload = verifyAccessToken(token)
+          
+          const restaurant = await prisma.restaurant.findUnique({
+            where: { id: review.restaurantId },
+            select: { ownerId: true },
+          })
+          
+          // Allow owner, review author, or admin to see hidden reviews
+          if (
+            restaurant?.ownerId !== payload.userId && 
+            review.userId !== payload.userId &&
+            payload.role !== 'ADMIN'
+          ) {
+            return NextResponse.json(
+              { error: 'Review not found' },
+              { status: 404 }
+            )
+          }
+        } catch {
+          return NextResponse.json(
+            { error: 'Review not found' },
+            { status: 404 }
+          )
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'Review not found' },
+          { status: 404 }
+        )
+      }
+    }
+
+    // Check if user has liked this review
+    let isLiked = false
+    const authHeader = request.headers.get('authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1]
+        const payload = verifyAccessToken(token)
+        
+        const like = await prisma.like.findUnique({
+          where: {
+            userId_reviewId: {
+              userId: payload.userId,
+              reviewId: review.id,
+            },
+          },
+        })
+        isLiked = !!like
+      } catch {
+        // Not logged in, ignore
+      }
+    }
+
+    // Get owner response if exists
+    const ownerResponse = await prisma.ownerResponse.findUnique({
+      where: { reviewId: review.id },
+    })
     
-    return NextResponse.json({ review })
+    return NextResponse.json({ 
+      review: {
+        ...review,
+        isLiked,
+        ownerResponse,
+      }
+    })
   } catch (error) {
     console.error('Get review error:', error)
     return NextResponse.json(
@@ -57,9 +129,10 @@ export async function GET(
 // PUT /api/reviews/[id] - Update a review
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -74,7 +147,7 @@ export async function PUT(
     
     // Check if review exists and belongs to user
     const existingReview = await prisma.review.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     })
     
     if (!existingReview) {
@@ -95,7 +168,7 @@ export async function PUT(
     const validatedData = updateReviewSchema.parse(body)
     
     const updatedReview = await prisma.review.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         visitDate: validatedData.visitDate ? new Date(validatedData.visitDate) : undefined,
@@ -146,9 +219,10 @@ export async function PUT(
 // DELETE /api/reviews/[id] - Delete a review
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -163,7 +237,7 @@ export async function DELETE(
     
     // Check if review exists and belongs to user
     const review = await prisma.review.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     })
     
     if (!review) {
@@ -181,7 +255,7 @@ export async function DELETE(
     }
     
     await prisma.review.delete({
-      where: { id: params.id },
+      where: { id: id },
     })
     
     return NextResponse.json({ message: 'Review deleted successfully' })

@@ -5,9 +5,10 @@ import { verifyAccessToken } from '@/lib/auth/jwt'
 // POST /api/reviews/[id]/like - Like a review
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -22,7 +23,7 @@ export async function POST(
     
     // Check if review exists
     const review = await prisma.review.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { 
         user: true,
         restaurant: {
@@ -45,7 +46,7 @@ export async function POST(
       where: {
         userId_reviewId: {
           userId: payload.userId,
-          reviewId: params.id,
+          reviewId: id,
         },
       },
     })
@@ -63,7 +64,7 @@ export async function POST(
       await tx.like.create({
         data: {
           userId: payload.userId,
-          reviewId: params.id,
+          reviewId: id,
         },
       })
       
@@ -89,7 +90,7 @@ export async function POST(
     
     // Get updated count
     const likeCount = await prisma.like.count({
-      where: { reviewId: params.id },
+      where: { reviewId: id },
     })
     
     return NextResponse.json({ 
@@ -108,9 +109,10 @@ export async function POST(
 // DELETE /api/reviews/[id]/like - Unlike a review
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -128,14 +130,14 @@ export async function DELETE(
       where: {
         userId_reviewId: {
           userId: payload.userId,
-          reviewId: params.id,
+          reviewId: id,
         },
       },
     })
     
     // Get updated count
     const likeCount = await prisma.like.count({
-      where: { reviewId: params.id },
+      where: { reviewId: id },
     })
     
     return NextResponse.json({ 

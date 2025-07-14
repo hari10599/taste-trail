@@ -80,6 +80,41 @@ async function main() {
       console.log('🔑 Password: demo123')
     }
 
+    // Create sample owner user
+    const existingOwner = await prisma.user.findUnique({
+      where: { email: 'owner@tastetrail.com' }
+    })
+
+    let ownerId = null
+    if (existingOwner) {
+      console.log('⚠️  Owner user already exists, skipping...')
+      ownerId = existingOwner.id
+    } else {
+      const ownerPassword = await bcrypt.hash('owner123', 10)
+      
+      const owner = await prisma.user.create({
+        data: {
+          email: 'owner@tastetrail.com',
+          password: ownerPassword,
+          name: 'Restaurant Owner',
+          role: 'OWNER',
+          verified: true,
+          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=owner',
+          profile: {
+            create: {
+              bio: 'Restaurant owner and culinary enthusiast',
+              location: 'San Francisco, CA'
+            }
+          }
+        }
+      })
+      
+      ownerId = owner.id
+      console.log('✅ Owner user created!')
+      console.log('📧 Email: owner@tastetrail.com')
+      console.log('🔑 Password: owner123')
+    }
+
     // Create a few sample restaurants
     const restaurantData = [
       {
@@ -107,7 +142,9 @@ async function main() {
           'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
           'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800'
         ],
-        coverImage: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200'
+        coverImage: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200',
+        ownerId: ownerId, // Assign owner to first restaurant
+        verified: true
       },
       {
         name: 'Sakura Sushi House',
@@ -184,7 +221,8 @@ async function main() {
     console.log('\n📝 Summary:')
     console.log('- Admin account: admin@tastetrail.com / TasteTrail2025!')
     console.log('- Demo account: demo@tastetrail.com / demo123')
-    console.log('- Sample restaurants added')
+    console.log('- Owner account: owner@tastetrail.com / owner123')
+    console.log('- Sample restaurants added (Golden Gate Bistro is owned by owner@tastetrail.com)')
     console.log('\n🚀 Your Taste Trail platform is ready!')
 
   } catch (error) {

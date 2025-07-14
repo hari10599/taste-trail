@@ -5,9 +5,10 @@ import { verifyAccessToken } from '@/lib/auth/jwt'
 // GET /api/reviews/[id]/likes - Check if user has liked a review
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -21,7 +22,7 @@ export async function GET(
       where: {
         userId_reviewId: {
           userId: payload.userId,
-          reviewId: params.id,
+          reviewId: id,
         },
       },
     })

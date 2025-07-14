@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category')
     const minRating = parseFloat(searchParams.get('minRating') || '0')
     const maxPrice = parseInt(searchParams.get('maxPrice') || '4')
+    const influencerOnly = searchParams.get('influencerOnly') === 'true'
+    const influencerId = searchParams.get('influencerId')
 
     if (!lat || !lng) {
       return NextResponse.json(
@@ -60,7 +62,13 @@ export async function GET(request: NextRequest) {
       include: {
         reviews: {
           select: {
-            rating: true
+            rating: true,
+            user: {
+              select: {
+                id: true,
+                role: true
+              }
+            }
           }
         },
         _count: {
@@ -80,14 +88,29 @@ export async function GET(request: NextRequest) {
           ? restaurant.reviews.reduce((sum, review) => sum + review.rating, 0) / restaurant.reviews.length
           : 0
         
+        // Check if restaurant has been reviewed by influencers
+        const hasInfluencerReview = restaurant.reviews.some(review => review.user.role === 'INFLUENCER')
+        
+        // If influencerOnly filter is active, only include restaurants with influencer reviews
+        if (influencerOnly && !hasInfluencerReview) {
+          return null
+        }
+        
+        // If filtering by specific influencer
+        if (influencerId && !restaurant.reviews.some(review => review.user.id === influencerId)) {
+          return null
+        }
+        
         return {
           ...restaurant,
           distance,
           avgRating,
-          reviewCount: restaurant._count.reviews
+          reviewCount: restaurant._count.reviews,
+          hasInfluencerReview
         }
       })
       .filter(restaurant => 
+        restaurant !== null &&
         restaurant.distance <= radius && 
         restaurant.avgRating >= minRating
       )
