@@ -40,6 +40,7 @@ interface ReviewCardProps {
     }
   }
   currentUserId?: string
+  isLiked?: boolean
   onLike?: () => void
   onComment?: () => void
   onShare?: () => void
@@ -51,6 +52,7 @@ interface ReviewCardProps {
 export function ReviewCard({
   review,
   currentUserId,
+  isLiked = false,
   onLike,
   onComment,
   onShare,
@@ -216,9 +218,9 @@ export function ReviewCard({
             variant="ghost"
             size="sm"
             onClick={onLike}
-            className="flex items-center gap-2"
+            className={`flex items-center gap-2 ${isLiked ? 'text-red-600 hover:text-red-700' : 'text-gray-500 hover:text-red-600'}`}
           >
-            <Heart className="h-4 w-4" />
+            <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-600 text-red-600' : ''}`} />
             {review._count.likes}
           </Button>
           

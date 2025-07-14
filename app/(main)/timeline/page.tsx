@@ -305,6 +305,7 @@ export default function TimelinePage() {
             <ReviewCard
               review={review}
               currentUserId={user?.id}
+              isLiked={likedReviews.has(review.id)}
               onLike={() => handleLike(review.id)}
               onComment={() => handleComment(review.id)}
               onShare={() => handleShare(review)}
