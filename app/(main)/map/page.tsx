@@ -1,12 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { RestaurantMap } from '@/components/ui/restaurant-map'
+import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { MapPin, List, Grid, Filter } from 'lucide-react'
+import { MapPin, List, Grid, Filter, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import axios from 'axios'
+
+// Dynamically import the map component to avoid SSR issues
+const RestaurantMap = dynamic(
+  () => import('@/components/ui/restaurant-map').then(mod => mod.RestaurantMap),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="h-[600px] rounded-lg bg-gray-100 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+)
 
 interface Restaurant {
   id: string

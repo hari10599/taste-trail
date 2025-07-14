@@ -14,36 +14,8 @@ const TileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLaye
 const Marker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false })
 const Popup = dynamic(() => import('react-leaflet').then(mod => mod.Popup), { ssr: false })
 
-// Import Leaflet and CSS
+// Import Leaflet CSS
 import 'leaflet/dist/leaflet.css'
-import L from 'leaflet'
-
-// Add custom CSS for markers
-if (typeof window !== 'undefined') {
-  const style = document.createElement('style')
-  style.textContent = `
-    .custom-restaurant-marker {
-      cursor: pointer !important;
-    }
-    .custom-restaurant-marker:hover {
-      transform: scale(1.1);
-      transition: transform 0.2s ease;
-    }
-    .leaflet-div-icon {
-      background: transparent !important;
-      border: none !important;
-    }
-  `
-  document.head.appendChild(style)
-}
-
-// Fix default markers in Leaflet
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
 
 interface Restaurant {
   id: string
@@ -78,6 +50,9 @@ function RestaurantMarker({ restaurant, onRestaurantClick }: {
 }) {
   // Create custom icon with rating
   const createCustomIcon = (rating: number) => {
+    // Import Leaflet only on client side
+    const L = typeof window !== 'undefined' ? require('leaflet') : null
+    if (!L) return null
     const ratingDisplay = rating > 0 ? rating.toFixed(1) : '?'
     const iconHtml = `
       <div style="
@@ -220,6 +195,17 @@ export function RestaurantMap({
   // Ensure we're on the client side before rendering the map
   useEffect(() => {
     setIsClient(true)
+    
+    // Initialize Leaflet icon defaults on client side
+    if (typeof window !== 'undefined') {
+      const L = require('leaflet')
+      delete (L.Icon.Default.prototype as any)._getIconUrl
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+      })
+    }
   }, [])
 
   // Update restaurants when prop changes
@@ -320,24 +306,27 @@ export function RestaurantMap({
           />
           
           {/* User location marker */}
-          {userLocation && (
+          {userLocation && typeof window !== 'undefined' && (
             <Marker 
               position={[userLocation.lat, userLocation.lng]}
-              icon={L.divIcon({
-                html: `
-                  <div style="
-                    width: 16px;
-                    height: 16px;
-                    background: #4285f4;
-                    border-radius: 50%;
-                    border: 3px solid white;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                  "></div>
-                `,
-                className: 'user-location-marker',
-                iconSize: [16, 16],
-                iconAnchor: [8, 8]
-              })}
+              icon={(() => {
+                const L = require('leaflet')
+                return L.divIcon({
+                  html: `
+                    <div style="
+                      width: 16px;
+                      height: 16px;
+                      background: #4285f4;
+                      border-radius: 50%;
+                      border: 3px solid white;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                    "></div>
+                  `,
+                  className: 'user-location-marker',
+                  iconSize: [16, 16],
+                  iconAnchor: [8, 8]
+                })
+              })()}
             >
               <Popup>Your Location</Popup>
             </Marker>
