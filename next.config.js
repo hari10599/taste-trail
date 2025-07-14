@@ -9,8 +9,9 @@ const nextConfig = {
   images: {
     domains: ['randomuser.me', 'images.unsplash.com', 'i.pravatar.cc', 'ik.imagekit.io', 'api.dicebear.com', 'picsum.photos'],
   },
-  // Optimize for production deployment
+  // Enable instrumentation for auto-seeding
   experimental: {
+    instrumentationHook: true,
     optimizePackageImports: ['lucide-react', 'react-leaflet'],
   },
 }
