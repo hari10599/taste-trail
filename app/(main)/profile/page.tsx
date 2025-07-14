@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { UserBadge } from '@/components/ui/user-badge'
 import { Camera, Loader2, MapPin, Phone, Mail, Award, Heart, MessageSquare, Utensils } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
@@ -182,9 +183,7 @@ export default function ProfilePage() {
                 </div>
                 
                 <h2 className="mt-4 text-xl font-semibold">{user?.name}</h2>
-                <Badge variant={roleBadgeVariants[user?.role as keyof typeof roleBadgeVariants]}>
-                  {roleLabels[user?.role as keyof typeof roleLabels]}
-                </Badge>
+                <UserBadge role={user?.role} size="md" className="show-user" />
                 
                 <div className="mt-4 text-sm text-gray-600 space-y-2">
                   <div className="flex items-center">

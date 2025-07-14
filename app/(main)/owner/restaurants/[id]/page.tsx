@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { StarRating } from '@/components/ui/star-rating'
+import { UserBadge } from '@/components/ui/user-badge'
 import {
   Star, MessageSquare, ThumbsUp, TrendingUp, Calendar,
   Eye, EyeOff, Award, Filter, ChevronLeft, BarChart3,
@@ -389,9 +390,7 @@ export default function RestaurantManagement() {
                               </p>
                             </div>
                           </div>
-                          {reviewer.user.role === 'INFLUENCER' && (
-                            <Badge variant="secondary">Influencer</Badge>
-                          )}
+                          <UserBadge role={reviewer.user.role} size="sm" />
                         </div>
                       ))}
                     </div>
@@ -414,9 +413,7 @@ export default function RestaurantManagement() {
                             <div className="flex items-center gap-2 mb-1">
                               <StarRating value={review.rating} readonly size="sm" />
                               <span className="font-medium">{review.user.name}</span>
-                              {review.user.role === 'INFLUENCER' && (
-                                <Badge variant="secondary" className="text-xs">Influencer</Badge>
-                              )}
+                              <UserBadge role={review.user.role} size="sm" />
                             </div>
                             {review.title && (
                               <h4 className="font-medium mb-1">{review.title}</h4>
@@ -496,9 +493,7 @@ export default function RestaurantManagement() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{review.user.name}</span>
-                            {review.user.role === 'INFLUENCER' && (
-                              <Badge variant="secondary">Influencer</Badge>
-                            )}
+                            <UserBadge role={review.user.role} size="sm" />
                           </div>
                           <StarRating value={review.rating} readonly size="sm" />
                         </div>

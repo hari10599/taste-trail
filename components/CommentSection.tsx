@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { UserBadge } from '@/components/ui/user-badge'
 import { formatDistanceToNow } from 'date-fns'
 import { MessageSquare, Send, Edit2, Trash2, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -178,11 +179,7 @@ export function CommentSection({ reviewId, currentUserId }: CommentSectionProps)
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-semibold text-sm">{comment.user.name}</span>
-              {comment.user.role === 'INFLUENCER' && (
-                <Badge variant="secondary" className="text-xs">
-                  Influencer
-                </Badge>
-              )}
+              <UserBadge role={comment.user.role} size="sm" />
               <span className="text-xs text-gray-500">{timeAgo}</span>
               {comment.createdAt !== comment.updatedAt && (
                 <span className="text-xs text-gray-500">(edited)</span>

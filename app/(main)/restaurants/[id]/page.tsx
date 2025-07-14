@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
+import { UserBadge } from '@/components/ui/user-badge'
 import { 
   Star, MapPin, Phone, Globe, Clock, DollarSign, 
   Wifi, Car, Trees, Music, Users, Loader2, 
@@ -271,11 +272,7 @@ export default function RestaurantDetailPage() {
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="font-semibold">{review.user.name}</p>
-                              {review.user.role === 'INFLUENCER' && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Influencer
-                                </Badge>
-                              )}
+                              <UserBadge role={review.user.role} size="sm" />
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <div className="flex">
@@ -407,9 +404,7 @@ export default function RestaurantDetailPage() {
                   />
                   <div>
                     <p className="font-medium">{restaurant.owner.name}</p>
-                    <Badge variant="success" className="text-xs">
-                      Verified Owner
-                    </Badge>
+                    <UserBadge role="OWNER" size="sm" />
                   </div>
                 </div>
               </CardContent>

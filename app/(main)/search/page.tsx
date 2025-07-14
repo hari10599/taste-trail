@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { StarRating } from '@/components/ui/star-rating'
 import { Avatar } from '@/components/ui/avatar'
+import { UserBadge } from '@/components/ui/user-badge'
 import {
   Search, MapPin, Star, MessageSquare, Heart, User,
   Building, Clock, Filter, X, Loader2
@@ -322,9 +323,7 @@ function SearchContent() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{review.user.name}</span>
-                                  {review.user.role === 'INFLUENCER' && (
-                                    <Badge variant="secondary" className="text-xs">Influencer</Badge>
-                                  )}
+                                  <UserBadge role={review.user.role} size="sm" />
                                   <span className="text-gray-400">•</span>
                                   <Link
                                     href={`/restaurants/${review.restaurant.id}`}
@@ -381,9 +380,7 @@ function SearchContent() {
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
                                     <h3 className="font-semibold">{user.name}</h3>
-                                    {user.role === 'INFLUENCER' && (
-                                      <Badge variant="secondary">Influencer</Badge>
-                                    )}
+                                    <UserBadge role={user.role} size="sm" />
                                   </div>
                                   {user.bio && (
                                     <p className="text-sm text-gray-600 mt-1">{user.bio}</p>
