@@ -1,28 +1,42 @@
 import { createClient } from 'redis'
 
-// Create Redis client
-const redis = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
-})
+// Only initialize Redis in runtime, not during build
+const isBuilding = process.env.NODE_ENV === 'production' && !process.env.REDIS_URL
 
+let redis: ReturnType<typeof createClient> | null = null
 let isConnected = false
 
-redis.on('error', (err) => {
-  console.error('Redis Client Error:', err)
-  isConnected = false
-})
+if (!isBuilding) {
+  try {
+    redis = createClient({
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
+    })
 
-redis.on('ready', () => {
-  console.log('Redis connected successfully')
-  isConnected = true
-})
+    redis.on('error', (err) => {
+      // Silence Redis errors during build/development
+      if (process.env.NODE_ENV === 'production') {
+        console.error('Redis Client Error:', err)
+      }
+      isConnected = false
+    })
 
-// Connect to Redis
-if (!redis.isOpen) {
-  redis.connect().catch((err) => {
-    console.error('Failed to connect to Redis:', err)
-    isConnected = false
-  })
+    redis.on('ready', () => {
+      console.log('Redis connected successfully')
+      isConnected = true
+    })
+
+    // Connect to Redis only if not building
+    if (!redis.isOpen && process.env.REDIS_URL) {
+      redis.connect().catch((err) => {
+        if (process.env.NODE_ENV === 'production') {
+          console.error('Failed to connect to Redis:', err)
+        }
+        isConnected = false
+      })
+    }
+  } catch (error) {
+    console.log('Redis initialization skipped')
+  }
 }
 
 // Cache utilities with graceful fallback
@@ -74,4 +88,4 @@ export const cache = {
   },
 }
 
-export default redis
+export default redis as ReturnType<typeof createClient>

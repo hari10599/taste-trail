@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -19,7 +20,7 @@ import Link from 'next/link'
 import { ImageUpload } from '@/components/ui/image-upload'
 import { uploadImage } from '@/lib/imagekit'
 
-export default function NewReviewPage() {
+function NewReviewContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const restaurantId = searchParams.get('restaurant')
@@ -28,120 +29,115 @@ export default function NewReviewPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null)
-  const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [uploadingImages, setUploadingImages] = useState(false)
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([])
   
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<CreateReviewInput>({
+  const form = useForm<CreateReviewInput>({
     resolver: zodResolver(createReviewSchema),
     defaultValues: {
       rating: 0,
+      title: '',
+      content: '',
       visitDate: new Date().toISOString().split('T')[0],
+      pricePerPerson: undefined,
+      dishes: [],
       images: [],
     },
   })
   
-  const rating = watch('rating')
-  
+  // Load restaurant if ID is provided
   useEffect(() => {
     if (restaurantId) {
-      fetchRestaurant(restaurantId)
+      loadRestaurant(restaurantId)
     }
   }, [restaurantId])
   
-  const fetchRestaurant = async (id: string) => {
+  const loadRestaurant = async (id: string) => {
     try {
       const response = await axios.get(`/api/restaurants/${id}`)
       setSelectedRestaurant(response.data.restaurant)
-      setValue('restaurantId', id)
     } catch (error) {
-      console.error('Failed to fetch restaurant:', error)
+      toast.error('Failed to load restaurant')
     }
   }
   
-  const searchRestaurants = async (query: string) => {
-    if (query.length < 2) {
+  // Search for restaurants
+  const searchRestaurants = async () => {
+    if (!searchQuery.trim()) {
       setSearchResults([])
       return
     }
     
+    setIsSearching(true)
     try {
-      const response = await axios.get(`/api/restaurants/search?q=${query}`)
-      setSearchResults(response.data.results)
-    } catch (error) {
-      console.error('Failed to search restaurants:', error)
-    }
-  }
-  
-  const handleRestaurantSelect = (restaurant: any) => {
-    setSelectedRestaurant(restaurant)
-    setValue('restaurantId', restaurant.id)
-    setSearchQuery('')
-    setSearchResults([])
-  }
-  
-  const handleImageUpload = async (files: File[]) => {
-    try {
-      const token = localStorage.getItem('accessToken')
-      if (!token) {
-        throw new Error('Please login to upload images')
-      }
-      
-      const uploadPromises = files.map(async (file) => {
-        const fileName = `review-${Date.now()}-${Math.random().toString(36).substring(7)}`
-        const result = await uploadImage({
-          file,
-          fileName,
-          folder: '/reviews',
-          tags: ['review', 'user-upload'],
-          transformation: {
-            width: 800,
-            height: 600,
-            crop: 'maintain_ratio',
-            format: 'webp',
-            quality: 85
-          }
-        })
-        return result.url
+      const response = await axios.get('/api/restaurants/search', {
+        params: { q: searchQuery },
       })
-      
-      const newImageUrls = await Promise.all(uploadPromises)
-      const updatedImages = [...uploadedImages, ...newImageUrls].slice(0, 10)
-      setUploadedImages(updatedImages)
-      setValue('images', updatedImages)
-      
-      toast.success(`${files.length} image(s) uploaded successfully`)
+      setSearchResults(response.data.restaurants || [])
     } catch (error) {
-      console.error('Image upload failed:', error)
-      toast.error('Failed to upload images. Please try again.')
-      throw error
+      toast.error('Failed to search restaurants')
+    } finally {
+      setIsSearching(false)
     }
   }
   
-  const removeImage = (index: number) => {
-    const updatedImages = uploadedImages.filter((_, i) => i !== index)
-    setUploadedImages(updatedImages)
-    setValue('images', updatedImages)
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchRestaurants()
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+  
+  const handleImageChange = async (files: File[]) => {
+    if (files.length === 0) {
+      setUploadedImageUrls([])
+      form.setValue('images', [])
+      return
+    }
+
+    setUploadingImages(true)
+    try {
+      const uploadPromises = files.map(file => uploadImage(file, 'reviews'))
+      const urls = await Promise.all(uploadPromises)
+      
+      setUploadedImageUrls(urls)
+      form.setValue('images', urls)
+    } catch (error) {
+      console.error('Failed to upload images:', error)
+      toast.error('Failed to upload images')
+    } finally {
+      setUploadingImages(false)
+    }
   }
   
   const onSubmit = async (data: CreateReviewInput) => {
+    if (!selectedRestaurant) {
+      toast.error('Please select a restaurant')
+      return
+    }
+    
     setIsLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await axios.post('/api/reviews', data, {
+      
+      const reviewData = {
+        ...data,
+        restaurantId: selectedRestaurant.id,
+        images: uploadedImageUrls,
+      }
+      
+      const response = await axios.post('/api/reviews', reviewData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
       
       toast.success('Review posted successfully!')
-      router.push(`/restaurants/${data.restaurantId}`)
+      router.push(`/restaurants/${selectedRestaurant.id}`)
     } catch (error: any) {
-      console.error('Failed to create review:', error)
       toast.error(error.response?.data?.error || 'Failed to post review')
     } finally {
       setIsLoading(false)
@@ -149,63 +145,66 @@ export default function NewReviewPage() {
   }
   
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <Link href="/restaurants" className="inline-flex items-center text-gray-600 hover:text-primary mb-4">
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Back to Restaurants
-        </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Write a Review</h1>
-      </div>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Link 
+        href="/dashboard" 
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6"
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+        Back to Dashboard
+      </Link>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Restaurant Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Select Restaurant</CardTitle>
-            <CardDescription>
-              Choose the restaurant you want to review
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">Write a Review</CardTitle>
+          <CardDescription>
+            Share your dining experience with the community
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Restaurant Selection */}
             {!selectedRestaurant ? (
               <div className="space-y-4">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                  <input
-                    type="text"
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
                     placeholder="Search for a restaurant..."
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value)
-                      searchRestaurants(e.target.value)
-                    }}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
                   />
                 </div>
                 
+                {isSearching && (
+                  <div className="text-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                  </div>
+                )}
+                
                 {searchResults.length > 0 && (
-                  <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
+                  <div className="border rounded-lg divide-y">
                     {searchResults.map((restaurant) => (
                       <button
                         key={restaurant.id}
                         type="button"
-                        onClick={() => handleRestaurantSelect(restaurant)}
-                        className="w-full p-3 text-left hover:bg-gray-50 flex items-center gap-3"
+                        onClick={() => {
+                          setSelectedRestaurant(restaurant)
+                          setSearchQuery('')
+                          setSearchResults([])
+                        }}
+                        className="w-full p-4 text-left hover:bg-gray-50 transition"
                       >
-                        {restaurant.coverImage && (
-                          <img
-                            src={restaurant.coverImage}
-                            alt={restaurant.name}
-                            className="w-12 h-12 rounded object-cover"
-                          />
-                        )}
-                        <div className="flex-1">
-                          <div className="font-medium">{restaurant.name}</div>
-                          <div className="text-sm text-gray-500 flex items-center gap-1">
+                        <div className="font-medium">{restaurant.name}</div>
+                        <div className="text-sm text-gray-600 flex items-center gap-4 mt-1">
+                          <span className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
                             {restaurant.address}
-                          </div>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" />
+                            {'$'.repeat(restaurant.priceRange)}
+                          </span>
                         </div>
                       </button>
                     ))}
@@ -213,166 +212,202 @@ export default function NewReviewPage() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  {selectedRestaurant.coverImage && (
-                    <img
-                      src={selectedRestaurant.coverImage}
-                      alt={selectedRestaurant.name}
-                      className="w-16 h-16 rounded-lg object-cover"
-                    />
-                  )}
-                  <div>
-                    <div className="font-semibold">{selectedRestaurant.name}</div>
-                    <div className="text-sm text-gray-500">{selectedRestaurant.address}</div>
+              <div className="bg-gray-50 p-4 rounded-lg flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{selectedRestaurant.name}</div>
+                  <div className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                    <MapPin className="h-3 w-3" />
+                    {selectedRestaurant.address}
                   </div>
                 </div>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setSelectedRestaurant(null)
-                    setValue('restaurantId', '')
-                  }}
+                  onClick={() => setSelectedRestaurant(null)}
                 >
-                  Change
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             )}
-            {errors.restaurantId && (
-              <p className="text-sm text-red-500 mt-2">{errors.restaurantId.message}</p>
-            )}
-          </CardContent>
-        </Card>
-        
-        {/* Rating & Visit Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Experience</CardTitle>
-            <CardDescription>
-              Rate your overall experience
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            
+            {/* Rating */}
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Overall Rating
-              </label>
+              <label className="block text-sm font-medium mb-2">Rating *</label>
               <StarRating
-                value={rating}
-                onChange={(value) => setValue('rating', value)}
+                value={form.watch('rating')}
+                onChange={(rating) => form.setValue('rating', rating)}
                 size="lg"
               />
-              {errors.rating && (
-                <p className="text-sm text-red-500 mt-1">{errors.rating.message}</p>
+              {form.formState.errors.rating && (
+                <p className="text-red-500 text-sm mt-1">
+                  {form.formState.errors.rating.message}
+                </p>
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  <Calendar className="inline h-4 w-4 mr-1" />
-                  Visit Date
-                </label>
+            {/* Title */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Title</label>
+              <Input
+                {...form.register('title')}
+                placeholder="Summarize your experience"
+              />
+              {form.formState.errors.title && (
+                <p className="text-red-500 text-sm mt-1">
+                  {form.formState.errors.title.message}
+                </p>
+              )}
+            </div>
+            
+            {/* Review Content */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Review *</label>
+              <textarea
+                {...form.register('content')}
+                className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                rows={6}
+                placeholder="Tell us about your experience..."
+              />
+              {form.formState.errors.content && (
+                <p className="text-red-500 text-sm mt-1">
+                  {form.formState.errors.content.message}
+                </p>
+              )}
+            </div>
+            
+            {/* Visit Date */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Visit Date *</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
+                  {...form.register('visitDate')}
                   type="date"
-                  {...register('visitDate')}
+                  className="pl-10"
                   max={new Date().toISOString().split('T')[0]}
                 />
-                {errors.visitDate && (
-                  <p className="text-sm text-red-500 mt-1">{errors.visitDate.message}</p>
-                )}
               </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  <DollarSign className="inline h-4 w-4 mr-1" />
-                  Price per Person (optional)
-                </label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  {...register('pricePerPerson', { valueAsNumber: true })}
-                />
-                {errors.pricePerPerson && (
-                  <p className="text-sm text-red-500 mt-1">{errors.pricePerPerson.message}</p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Review Content */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Review</CardTitle>
-            <CardDescription>
-              Share your experience with others
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              label="Title (optional)"
-              placeholder="Summarize your experience"
-              {...register('title')}
-              error={errors.title?.message}
-            />
-            
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
-                Review
-              </label>
-              <textarea
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary min-h-[150px]"
-                placeholder="Tell us about your experience... (minimum 50 characters)"
-                {...register('content')}
-              />
-              {errors.content && (
-                <p className="text-sm text-red-500 mt-1">{errors.content.message}</p>
+              {form.formState.errors.visitDate && (
+                <p className="text-red-500 text-sm mt-1">
+                  {form.formState.errors.visitDate.message}
+                </p>
               )}
             </div>
             
-            {/* Image Upload */}
+            {/* Price per Person */}
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Photos (optional)
+              <label className="block text-sm font-medium mb-2">Price per Person</label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  {...form.register('pricePerPerson', { valueAsNumber: true })}
+                  type="number"
+                  className="pl-10"
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+              {form.formState.errors.pricePerPerson && (
+                <p className="text-red-500 text-sm mt-1">
+                  {form.formState.errors.pricePerPerson.message}
+                </p>
+              )}
+            </div>
+            
+            {/* Dishes */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Dishes Tried</label>
+              <Input
+                placeholder="Enter dish names separated by commas"
+                onChange={(e) => {
+                  const dishes = e.target.value
+                    .split(',')
+                    .map(d => d.trim())
+                    .filter(d => d.length > 0)
+                  form.setValue('dishes', dishes)
+                }}
+              />
+              {form.formState.errors.dishes && (
+                <p className="text-red-500 text-sm mt-1">
+                  {form.formState.errors.dishes.message}
+                </p>
+              )}
+            </div>
+            
+            {/* Images */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                <ImageIcon className="inline h-4 w-4 mr-1" />
+                Photos
               </label>
               <ImageUpload
-                onUpload={handleImageUpload}
-                onRemove={removeImage}
-                existingImages={uploadedImages}
+                onChange={handleImageChange}
                 maxFiles={10}
-                placeholder="Drag and drop photos here, or click to select files"
+                disabled={uploadingImages}
               />
+              {uploadingImages && (
+                <p className="text-sm text-gray-600 mt-2">Uploading images...</p>
+              )}
+              {uploadedImageUrls.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {uploadedImageUrls.map((url, index) => (
+                    <img
+                      key={index}
+                      src={url}
+                      alt={`Upload ${index + 1}`}
+                      className="h-20 w-20 object-cover rounded"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Submit Button */}
+            <div className="flex gap-4">
+              <Button
+                type="submit"
+                disabled={isLoading || !selectedRestaurant || form.watch('rating') === 0 || uploadingImages}
+                className="flex-1"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  'Post Review'
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push('/dashboard')}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default function NewReviewPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="p-8">
+            <div className="flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
           </CardContent>
         </Card>
-        
-        {/* Submit */}
-        <div className="flex justify-end gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={isLoading || !selectedRestaurant || rating === 0}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Posting...
-              </>
-            ) : (
-              'Post Review'
-            )}
-          </Button>
-        </div>
-      </form>
-    </div>
+      </div>
+    }>
+      <NewReviewContent />
+    </Suspense>
   )
 }
