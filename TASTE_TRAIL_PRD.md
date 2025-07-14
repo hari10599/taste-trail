@@ -133,10 +133,10 @@ Taste Trail is a restaurant review platform connecting food enthusiasts, influen
 - Frontend: Upload components, gallery
 - Deliverable: Media management
 
-**Day 14: Performance**
-- Backend: Caching, optimization
-- Frontend: Lazy loading, code splitting
-- Deliverable: Optimized app
+**Day 14: Notifications**
+- Backend: Notification system
+- Frontend: Notification center
+- Deliverable: Real-time notifications
 
 **Day 15: Mobile/PWA**
 - Backend: Mobile APIs
@@ -144,10 +144,10 @@ Taste Trail is a restaurant review platform connecting food enthusiasts, influen
 - Deliverable: Mobile-ready app
 
 ### Week 4: Enhancement
-**Day 16: Notifications**
-- Backend: Notification system
-- Frontend: Notification center
-- Deliverable: Real-time notifications
+**Day 16: Performance**
+- Backend: Caching, optimization
+- Frontend: Lazy loading, code splitting
+- Deliverable: Optimized app
 
 **Day 17: Analytics**
 - Backend: Analytics APIs

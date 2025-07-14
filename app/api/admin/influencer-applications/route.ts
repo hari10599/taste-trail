@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { verifyAccessToken } from '@/lib/auth/jwt'
+import { createNotification } from '@/lib/notifications'
 
 // GET /api/admin/influencer-applications - Get all applications (Admin only)
 export async function GET(request: NextRequest) {
@@ -156,25 +157,13 @@ export async function PUT(request: NextRequest) {
       })
       
       // Create notification
-      await prisma.notification.create({
-        data: {
-          userId: application.userId,
-          type: 'influencer_approved',
-          title: 'Influencer Application Approved!',
-          message: 'Congratulations! Your influencer application has been approved. You now have access to verified features.',
-          data: {}
-        }
+      await createNotification('influencer_approved', application.userId, {
+        userName: application.user.name
       })
     } else if (status === 'REJECTED') {
       // Create notification for rejection
-      await prisma.notification.create({
-        data: {
-          userId: application.userId,
-          type: 'influencer_rejected',
-          title: 'Influencer Application Update',
-          message: 'Your influencer application has been reviewed. Please check your application status for more details.',
-          data: {}
-        }
+      await createNotification('influencer_rejected', application.userId, {
+        notes: reviewerNotes
       })
     }
     

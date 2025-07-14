@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { verifyAccessToken } from '@/lib/auth/jwt'
+import { createNotification } from '@/lib/notifications'
 import { z } from 'zod'
 
 const createCommentSchema = z.object({
@@ -112,67 +113,55 @@ export async function POST(
       }
     }
     
-    // Use transaction to create comment and notifications
-    const comment = await prisma.$transaction(async (tx) => {
-      // Create comment
-      const newComment = await tx.comment.create({
-        data: {
-          content: validatedData.content,
-          userId: payload.userId,
-          reviewId: id,
-          parentId: validatedData.parentId,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              avatar: true,
-              role: true,
-            },
+    // Create comment
+    const comment = await prisma.comment.create({
+      data: {
+        content: validatedData.content,
+        userId: payload.userId,
+        reviewId: id,
+        parentId: validatedData.parentId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+            role: true,
           },
         },
+      },
+    })
+    
+    // Create notification for review author (if not commenting on own review)
+    if (review.userId !== payload.userId) {
+      await createNotification('comment', review.userId, {
+        commenter: { name: comment.user.name },
+        restaurant: { name: review.restaurant.name }
+      }, {
+        fromId: payload.userId,
+        reviewId: review.id,
+        commentId: comment.id
+      })
+    }
+    
+    // If this is a reply, notify the parent comment author
+    if (validatedData.parentId) {
+      const parentComment = await prisma.comment.findUnique({
+        where: { id: validatedData.parentId },
+        select: { userId: true },
       })
       
-      // Create notification for review author (if not commenting on own review)
-      if (review.userId !== payload.userId) {
-        await tx.notification.create({
-          data: {
-            type: 'comment',
-            title: 'New comment on your review',
-            message: `${newComment.user.name} commented on your review of ${review.restaurant.name}`,
-            userId: review.userId,
-            fromId: payload.userId,
-            reviewId: review.id,
-            commentId: newComment.id,
-          },
+      if (parentComment && parentComment.userId !== payload.userId) {
+        await createNotification('reply', parentComment.userId, {
+          replier: { name: comment.user.name }
+        }, {
+          fromId: payload.userId,
+          reviewId: review.id,
+          commentId: comment.id
         })
       }
-      
-      // If this is a reply, notify the parent comment author
-      if (validatedData.parentId) {
-        const parentComment = await tx.comment.findUnique({
-          where: { id: validatedData.parentId },
-          select: { userId: true },
-        })
-        
-        if (parentComment && parentComment.userId !== payload.userId) {
-          await tx.notification.create({
-            data: {
-              type: 'reply',
-              title: 'New reply to your comment',
-              message: `${newComment.user.name} replied to your comment`,
-              userId: parentComment.userId,
-              fromId: payload.userId,
-              reviewId: review.id,
-              commentId: newComment.id,
-            },
-          })
-        }
-      }
-      
-      return newComment
-    })
+    }
     
     return NextResponse.json({ comment }, { status: 201 })
   } catch (error: any) {

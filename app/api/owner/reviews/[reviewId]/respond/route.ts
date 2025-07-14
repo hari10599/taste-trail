@@ -19,7 +19,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const reviewId = reviewId
     const { content } = await request.json()
 
     if (!content || content.trim().length < 10) {
@@ -109,7 +108,6 @@ export async function GET(
 ) {
   try {
     const { reviewId } = await params
-    const reviewId = reviewId
 
     const response = await prisma.ownerResponse.findUnique({
       where: { reviewId },
@@ -148,8 +146,6 @@ export async function DELETE(
     if (!decoded) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const reviewId = reviewId
 
     // Get review with restaurant info
     const review = await prisma.review.findUnique({

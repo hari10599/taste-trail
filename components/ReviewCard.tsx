@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { StarRating } from '@/components/ui/star-rating'
+import { UserBadge } from '@/components/ui/user-badge'
 import { 
   Heart, MessageSquare, Share2, MoreVertical, 
   Edit, Trash2, Flag, Calendar, DollarSign 
@@ -82,11 +83,7 @@ export function ReviewCard({
                 <Link href={`/users/${review.user.id}`} className="font-semibold hover:underline">
                   {review.user.name}
                 </Link>
-                {review.user.role === 'INFLUENCER' && (
-                  <Badge variant="secondary" className="text-xs">
-                    Influencer
-                  </Badge>
-                )}
+                <UserBadge role={review.user.role} size="sm" />
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <StarRating value={review.rating} size="sm" readonly />

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Home, MapPin, Clock, User, LogOut, Menu, X, Star, Map, Building } from 'lucide-react'
+import { Home, MapPin, Clock, User, LogOut, Menu, X, Star, Map, Building, ChevronDown, Shield } from 'lucide-react'
 import { NotificationBell } from '@/components/NotificationBell'
 import { SearchInput } from '@/components/ui/search-input'
 import toast from 'react-hot-toast'
@@ -18,12 +18,25 @@ export default function MainLayout({
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     checkAuth()
   }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isUserMenuOpen) {
+        setIsUserMenuOpen(false)
+      }
+    }
+    
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [isUserMenuOpen])
 
   const checkAuth = async () => {
     try {
@@ -95,24 +108,6 @@ export default function MainLayout({
                   <Clock className="h-4 w-4" />
                   <span>Timeline</span>
                 </Link>
-                {isAuthenticated && user?.role !== 'INFLUENCER' && (
-                  <Link href="/influencer/apply" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition">
-                    <Star className="h-4 w-4" />
-                    <span>Become Influencer</span>
-                  </Link>
-                )}
-                {isAuthenticated && user?.role === 'OWNER' && (
-                  <Link href="/owner" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition">
-                    <Building className="h-4 w-4" />
-                    <span>Owner Dashboard</span>
-                  </Link>
-                )}
-                {isAuthenticated && (
-                  <Link href="/profile" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition">
-                    <User className="h-4 w-4" />
-                    <span>Profile</span>
-                  </Link>
-                )}
               </div>
             </div>
             
@@ -121,13 +116,65 @@ export default function MainLayout({
               {isAuthenticated && user ? (
                 <div className="hidden md:flex items-center space-x-4">
                   <NotificationBell />
-                  <Link href="/profile" className="flex items-center space-x-2 text-gray-700 hover:text-primary transition">
-                    <User className="h-4 w-4" />
-                    <span>{user.name}</span>
-                  </Link>
-                  <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    <LogOut className="h-4 w-4" />
-                  </Button>
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setIsUserMenuOpen(!isUserMenuOpen)
+                      }}
+                      className="flex items-center space-x-2 text-gray-700 hover:text-primary transition px-3 py-2 rounded-md hover:bg-gray-100"
+                    >
+                      <User className="h-4 w-4" />
+                      <span className="hidden lg:block">{user.name}</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                    {isUserMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border z-50">
+                        <div className="py-1">
+                          <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            <div className="flex items-center space-x-2">
+                              <User className="h-4 w-4" />
+                              <span>Profile</span>
+                            </div>
+                          </Link>
+                          {user?.role !== 'INFLUENCER' && (
+                            <Link href="/influencer/apply" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              <div className="flex items-center space-x-2">
+                                <Star className="h-4 w-4" />
+                                <span>Become Influencer</span>
+                              </div>
+                            </Link>
+                          )}
+                          {user?.role === 'OWNER' && (
+                            <Link href="/owner" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              <div className="flex items-center space-x-2">
+                                <Building className="h-4 w-4" />
+                                <span>Owner Dashboard</span>
+                              </div>
+                            </Link>
+                          )}
+                          {(user?.role === 'ADMIN' || user?.role === 'MODERATOR') && (
+                            <Link href="/admin" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              <div className="flex items-center space-x-2">
+                                <Shield className="h-4 w-4" />
+                                <span>Admin Dashboard</span>
+                              </div>
+                            </Link>
+                          )}
+                          <hr className="my-1" />
+                          <button
+                            onClick={handleLogout}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <LogOut className="h-4 w-4" />
+                              <span>Sign Out</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="hidden md:flex items-center space-x-4">
@@ -170,30 +217,40 @@ export default function MainLayout({
               <Link href="/timeline" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
                 Timeline
               </Link>
-              {isAuthenticated && user?.role !== 'INFLUENCER' && (
-                <Link href="/influencer/apply" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
-                  Become Influencer
-                </Link>
-              )}
-              {isAuthenticated && user?.role === 'OWNER' && (
-                <Link href="/owner" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
-                  Owner Dashboard
-                </Link>
-              )}
               {isAuthenticated && user ? (
                 <>
+                  <hr className="my-2" />
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Account
+                  </div>
                   <Link href="/profile" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
                     Profile ({user.name})
                   </Link>
+                  {user?.role !== 'INFLUENCER' && (
+                    <Link href="/influencer/apply" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
+                      Become Influencer
+                    </Link>
+                  )}
+                  {user?.role === 'OWNER' && (
+                    <Link href="/owner" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
+                      Owner Dashboard
+                    </Link>
+                  )}
+                  {(user?.role === 'ADMIN' || user?.role === 'MODERATOR') && (
+                    <Link href="/admin" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
+                      Admin Dashboard
+                    </Link>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="block w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
                   >
-                    Logout
+                    Sign Out
                   </button>
                 </>
               ) : (
                 <>
+                  <hr className="my-2" />
                   <Link href="/login" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
                     Sign In
                   </Link>

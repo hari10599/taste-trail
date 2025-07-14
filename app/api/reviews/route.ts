@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { verifyAccessToken } from '@/lib/auth/jwt'
 import { createReviewSchema } from '@/lib/validations/review'
+import { createNotification } from '@/lib/notifications'
 
 // GET /api/reviews - Get reviews with filters
 export async function GET(request: NextRequest) {
@@ -217,18 +218,14 @@ export async function POST(request: NextRequest) {
     })
     
     // Create a notification for the restaurant owner if exists
-    if (restaurant.ownerId) {
-      await prisma.notification.create({
-        data: {
-          userId: restaurant.ownerId,
-          type: 'new_review',
-          title: 'New Review',
-          message: `${review.user.name} reviewed ${restaurant.name}`,
-          data: {
-            reviewId: review.id,
-            restaurantId: restaurant.id,
-          },
-        },
+    if (restaurant.ownerId && restaurant.ownerId !== payload.userId) {
+      await createNotification('new_review', restaurant.ownerId, {
+        reviewer: { name: review.user.name },
+        restaurant: { name: restaurant.name },
+        rating: review.rating
+      }, {
+        fromId: payload.userId,
+        reviewId: review.id
       })
     }
     

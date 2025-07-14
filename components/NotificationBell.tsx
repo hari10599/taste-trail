@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Bell } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Bell, Wifi, WifiOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
+import { UserBadge } from '@/components/ui/user-badge'
 import { formatDistanceToNow } from 'date-fns'
 import axios from 'axios'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 
 interface Notification {
   id: string
@@ -36,13 +38,121 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected')
+  
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectAttempts = useRef(0)
+  const maxReconnectAttempts = 5
   
   useEffect(() => {
     fetchNotifications()
-    // Poll for new notifications every 30 seconds
+    setupSSEConnection()
+    
+    return () => {
+      cleanup()
+    }
+  }, [])
+  
+  const cleanup = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+  }
+  
+  const setupSSEConnection = () => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return
+    
+    try {
+      setConnectionStatus('connecting')
+      const eventSource = new EventSource(`/api/notifications/stream?token=${token}`)
+      eventSourceRef.current = eventSource
+      
+      eventSource.onopen = () => {
+        setConnectionStatus('connected')
+        setIsConnected(true)
+        reconnectAttempts.current = 0
+        console.log('SSE connection established')
+      }
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          handleSSEMessage(data)
+        } catch (error) {
+          console.error('Failed to parse SSE message:', error)
+        }
+      }
+      
+      eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error)
+        setConnectionStatus('error')
+        setIsConnected(false)
+        
+        // Attempt to reconnect with exponential backoff
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttempts.current++
+            console.log(`Reconnecting... attempt ${reconnectAttempts.current}`)
+            eventSource.close()
+            setupSSEConnection()
+          }, delay)
+        } else {
+          setConnectionStatus('disconnected')
+          console.log('Max reconnection attempts reached, falling back to polling')
+          // Fall back to polling
+          startPolling()
+        }
+      }
+    } catch (error) {
+      console.error('Failed to setup SSE connection:', error)
+      setConnectionStatus('error')
+      startPolling()
+    }
+  }
+  
+  const startPolling = () => {
+    // Fallback polling every 30 seconds
     const interval = setInterval(fetchNotifications, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }
+  
+  const handleSSEMessage = (data: any) => {
+    switch (data.type) {
+      case 'connected':
+        console.log('SSE connection confirmed')
+        break
+        
+      case 'notification':
+        // Add new notification to the list
+        setNotifications(prev => [data.payload, ...prev.slice(0, 9)]) // Keep only 10 most recent
+        setUnreadCount(prev => prev + 1)
+        
+        // Show toast for important notifications
+        if (['like', 'comment', 'reply', 'new_review'].includes(data.payload.type)) {
+          toast.success(data.payload.title, {
+            duration: 4000,
+            icon: getNotificationIcon(data.payload.type)
+          })
+        }
+        break
+        
+      case 'unread_count_update':
+        setUnreadCount(data.unreadCount)
+        break
+        
+      default:
+        console.log('Unknown SSE message type:', data.type)
+    }
+  }
   
   const fetchNotifications = async () => {
     try {
@@ -90,6 +200,21 @@ export function NotificationBell() {
       }
     } catch (error) {
       console.error('Failed to mark notifications as read:', error)
+      toast.error('Failed to mark notifications as read')
+    }
+  }
+  
+  const getConnectionStatusIcon = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return <Wifi className="h-3 w-3 text-green-500" />
+      case 'connecting':
+        return <div className="h-3 w-3 bg-yellow-500 rounded-full animate-pulse" />
+      case 'disconnected':
+      case 'error':
+        return <WifiOff className="h-3 w-3 text-red-500" />
+      default:
+        return null
     }
   }
   
@@ -148,7 +273,10 @@ export function NotificationBell() {
           <Card className="absolute right-0 mt-2 w-96 max-h-[600px] overflow-hidden z-20 shadow-lg">
             <CardHeader className="border-b">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Notifications</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">Notifications</CardTitle>
+                  {getConnectionStatusIcon()}
+                </div>
                 {unreadCount > 0 && (
                   <Button
                     variant="ghost"
@@ -159,6 +287,13 @@ export function NotificationBell() {
                   </Button>
                 )}
               </div>
+              {connectionStatus !== 'connected' && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {connectionStatus === 'connecting' && 'Connecting...'}
+                  {connectionStatus === 'disconnected' && 'Disconnected - using polling'}
+                  {connectionStatus === 'error' && 'Connection error - retrying...'}
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0 overflow-y-auto max-h-[500px]">
               {notifications.length === 0 ? (
@@ -191,7 +326,12 @@ export function NotificationBell() {
                               />
                             )}
                             <div className="flex-1">
-                              <p className="font-semibold text-sm">{notification.title}</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="font-semibold text-sm">{notification.title}</p>
+                                {notification.from && (
+                                  <UserBadge role={notification.from.role} size="sm" />
+                                )}
+                              </div>
                               <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
                               <p className="text-xs text-gray-500 mt-1">
                                 {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}

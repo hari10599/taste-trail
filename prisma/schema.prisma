@@ -40,6 +40,11 @@ model User {
   sentNotifications Notification[] @relation("NotificationSender")
   sessions      Session[]
   influencerApplication InfluencerApplication?
+  reports       Report[] @relation("ReportedBy")
+  moderationActions ModerationAction[] @relation("ModeratedBy")
+  strikes       UserStrike[] @relation("UserStrikes")
+  notificationPrefs NotificationPreference? @relation("NotificationPrefs")
+  mediaUploads  MediaUpload[] @relation("MediaUploads")
   
   @@index([email])
 }
@@ -237,4 +242,141 @@ model OwnerResponse {
   updatedAt    DateTime @updatedAt
   
   @@index([reviewId])
+}
+
+enum ReportType {
+  REVIEW
+  RESTAURANT
+  USER
+  COMMENT
+}
+
+enum ReportStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  REJECTED
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  type        ReportType
+  targetId    String
+  reporterId  String
+  reporter    User         @relation("ReportedBy", fields: [reporterId], references: [id])
+  reason      String
+  description String?
+  status      ReportStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  // Moderation actions on this report
+  moderationActions ModerationAction[]
+  
+  @@index([type, targetId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ModerationActionType {
+  WARNING
+  TEMPORARY_BAN
+  PERMANENT_BAN
+  CONTENT_REMOVAL
+  CONTENT_RESTORE
+  ACCOUNT_SUSPENSION
+  ACCOUNT_REINSTATEMENT
+  REPORT_DISMISS
+}
+
+model ModerationAction {
+  id          String               @id @default(cuid())
+  type        ModerationActionType
+  targetId    String
+  targetType  String // 'user', 'review', 'restaurant', 'comment'
+  moderatorId String
+  moderator   User                 @relation("ModeratedBy", fields: [moderatorId], references: [id])
+  reason      String?
+  notes       String?
+  reportId    String?
+  report      Report?              @relation(fields: [reportId], references: [id])
+  expiresAt   DateTime?
+  createdAt   DateTime             @default(now())
+  
+  // Related strikes
+  strikes     UserStrike[]
+  
+  @@index([targetId, targetType])
+  @@index([moderatorId])
+  @@index([createdAt])
+}
+
+model UserStrike {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("UserStrikes", fields: [userId], references: [id])
+  reason    String
+  actionId  String
+  action    ModerationAction @relation(fields: [actionId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ContentFlag {
+  id        String   @id @default(cuid())
+  contentId String
+  contentType String // 'review', 'comment', 'restaurant'
+  reason    String
+  automated Boolean  @default(false)
+  severity  Int      @default(1) // 1-5 severity scale
+  createdAt DateTime @default(now())
+  
+  @@unique([contentId, contentType])
+  @@index([contentType])
+  @@index([severity])
+}
+
+model NotificationPreference {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  user         User    @relation("NotificationPrefs", fields: [userId], references: [id])
+  emailEnabled Boolean @default(true)
+  pushEnabled  Boolean @default(true)
+  reviewLikes  Boolean @default(true)
+  reviewComments Boolean @default(true)
+  newFollowers Boolean @default(true)
+  ownerResponses Boolean @default(true)
+  systemUpdates Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model MediaUpload {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("MediaUploads", fields: [userId], references: [id])
+  fileId       String   @unique // ImageKit file ID
+  fileName     String
+  originalName String
+  filePath     String
+  url          String
+  thumbnailUrl String?
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  folder       String   @default("general")
+  tags         String[]
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([fileId])
+  @@index([folder])
+  @@index([createdAt])
 }

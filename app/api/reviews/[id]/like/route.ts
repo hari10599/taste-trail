@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { verifyAccessToken } from '@/lib/auth/jwt'
+import { createNotification } from '@/lib/notifications'
 
 // POST /api/reviews/[id]/like - Like a review
 export async function POST(
@@ -58,35 +59,30 @@ export async function POST(
       )
     }
     
-    // Use transaction to create like and notification
-    await prisma.$transaction(async (tx) => {
-      // Create like
-      await tx.like.create({
-        data: {
-          userId: payload.userId,
-          reviewId: id,
-        },
+    // Create like
+    await prisma.like.create({
+      data: {
+        userId: payload.userId,
+        reviewId: id,
+      },
+    })
+    
+    // Create notification for review author (if not liking own review)
+    if (review.userId !== payload.userId) {
+      const liker = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { name: true },
       })
       
-      // Create notification for review author (if not liking own review)
-      if (review.userId !== payload.userId) {
-        const liker = await tx.user.findUnique({
-          where: { id: payload.userId },
-          select: { name: true },
-        })
-        
-        await tx.notification.create({
-          data: {
-            type: 'like',
-            title: 'Someone liked your review',
-            message: `${liker?.name} liked your review of ${review.restaurant.name}`,
-            userId: review.userId,
-            fromId: payload.userId,
-            reviewId: review.id,
-          },
-        })
-      }
-    })
+      await createNotification('like', review.userId, {
+        liker: { name: liker?.name },
+        restaurant: { name: review.restaurant.name }
+      }, {
+        fromId: payload.userId,
+        reviewId: review.id,
+        skipIfExists: true
+      })
+    }
     
     // Get updated count
     const likeCount = await prisma.like.count({
