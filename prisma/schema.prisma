@@ -1,0 +1,210 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  INFLUENCER
+  OWNER
+  ADMIN
+  MODERATOR
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  bio           String?
+  avatar        String?
+  role          UserRole  @default(USER)
+  verified      Boolean   @default(false)
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  reviews       Review[]
+  likes         Like[]
+  comments      Comment[]
+  restaurants   Restaurant[] // For owners
+  notifications Notification[] @relation("NotificationRecipient")
+  sentNotifications Notification[] @relation("NotificationSender")
+  sessions      Session[]
+  influencerApplication InfluencerApplication?
+  
+  @@index([email])
+}
+
+model Profile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location         String?
+  phone            String?
+  dietaryPrefs     String[]
+  socialLinks      Json?    // For influencers
+  followerCount    Int?     // For influencers
+  verificationDocs String[] // For verification requests
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+model Restaurant {
+  id           String   @id @default(cuid())
+  name         String
+  description  String
+  address      String
+  latitude     Float
+  longitude    Float
+  phone        String?
+  website      String?
+  priceRange   Int      @default(2) // 1-4
+  categories   String[]
+  amenities    String[]
+  images       String[]
+  coverImage   String?
+  openingHours Json     // Store as JSON object
+  verified     Boolean  @default(false)
+  ownerId      String?
+  owner        User?    @relation(fields: [ownerId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reviews      Review[]
+  
+  @@index([name])
+  @@index([categories])
+}
+
+model Review {
+  id            String    @id @default(cuid())
+  rating        Int       // 1-5
+  title         String?
+  content       String
+  images        String[]
+  visitDate     DateTime
+  pricePerPerson Float?
+  helpful       Int       @default(0)
+  notHelpful    Int       @default(0)
+  isPromoted    Boolean   @default(false)
+  isHidden      Boolean   @default(false)
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurantId  String
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  
+  likes         Like[]
+  comments      Comment[]
+  notifications Notification[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([createdAt])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, reviewId])
+  @@index([reviewId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  notifications Notification[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([reviewId])
+  @@index([parentId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // like, comment, follow, review_response, etc.
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  data      Json?    // Additional data
+  
+  userId    String
+  user      User     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  
+  fromId    String?
+  from      User?    @relation("NotificationSender", fields: [fromId], references: [id], onDelete: SetNull)
+  
+  reviewId  String?
+  review    Review?  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model InfluencerApplication {
+  id                  String            @id @default(cuid())
+  userId              String            @unique
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instagramHandle     String?
+  youtubeChannel      String?
+  tiktokHandle        String?
+  followerCount       Int
+  contentType         String[]
+  reasonForApplication String
+  status              ApplicationStatus @default(PENDING)
+  submittedAt         DateTime          @default(now())
+  reviewedAt          DateTime?
+  reviewedBy          String?
+  reviewerNotes       String?
+  
+  @@index([status])
+  @@index([submittedAt])
+}
