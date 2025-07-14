@@ -1,11 +1,22 @@
 import ImageKit from 'imagekit'
 
-// Server-side ImageKit instance
-const imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY || '',
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY || '',
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || '',
-})
+// Check if ImageKit is configured
+const isImageKitConfigured = !!(
+  process.env.IMAGEKIT_PUBLIC_KEY && 
+  process.env.IMAGEKIT_PRIVATE_KEY && 
+  process.env.IMAGEKIT_URL_ENDPOINT
+)
+
+// Server-side ImageKit instance (only initialize if configured)
+let imagekit: ImageKit | null = null
+
+if (isImageKitConfigured) {
+  imagekit = new ImageKit({
+    publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+    privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+  })
+}
 
 // Client-side configuration
 export const imagekitConfig = {
@@ -42,6 +53,25 @@ export interface UploadResult {
 
 // Upload file to ImageKit
 export async function uploadImage(options: UploadOptions): Promise<UploadResult> {
+  // If ImageKit is not configured, return a mock response
+  if (!imagekit) {
+    console.warn('ImageKit is not configured. Using placeholder images.')
+    
+    // Return a placeholder image response
+    const placeholderUrl = `https://images.unsplash.com/photo-${Date.now()}?w=800`
+    return {
+      fileId: `placeholder-${Date.now()}`,
+      name: options.fileName,
+      url: placeholderUrl,
+      thumbnailUrl: placeholderUrl,
+      filePath: `/placeholder/${options.fileName}`,
+      size: 0,
+      width: 800,
+      height: 600,
+      fileType: 'image/jpeg',
+    }
+  }
+
   try {
     const uploadOptions: any = {
       file: options.file,
@@ -96,6 +126,12 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
 
 // Delete file from ImageKit
 export async function deleteImage(fileId: string): Promise<void> {
+  // If ImageKit is not configured, just log and return
+  if (!imagekit) {
+    console.warn('ImageKit is not configured. Cannot delete image.')
+    return
+  }
+
   try {
     await imagekit.deleteFile(fileId)
   } catch (error) {

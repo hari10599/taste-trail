@@ -18,7 +18,7 @@ import toast from 'react-hot-toast'
 import axios from 'axios'
 import Link from 'next/link'
 import { ImageUpload } from '@/components/ui/image-upload'
-import { uploadImage } from '@/lib/imagekit'
+import { uploadImage } from '@/lib/imagekit-client'
 
 function NewReviewContent() {
   const router = useRouter()
