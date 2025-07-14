@@ -54,7 +54,7 @@ Complete guide to deploy Taste Trail (Next.js + PostgreSQL) to Render.com
 2. **Configure Build Settings**
    ```yaml
    # Build settings
-   Build Command: npm install && npm run build
+   Build Command: npm ci && npm run build
    Start Command: npm start
    ```
 
