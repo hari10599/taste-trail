@@ -34,11 +34,19 @@ export default function RestaurantDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
+  const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set())
   
   useEffect(() => {
     checkAuth()
     fetchRestaurant()
   }, [params.id])
+
+  useEffect(() => {
+    if (user && recentReviews.length > 0) {
+      fetchRestaurant() // Refetch to get like status
+    }
+  }, [user])
   
   const checkAuth = async () => {
     const token = localStorage.getItem('accessToken')
@@ -63,6 +71,25 @@ export default function RestaurantDetailPage() {
       const response = await axios.get(`/api/restaurants/${params.id}`)
       setRestaurant(response.data.restaurant)
       setRecentReviews(response.data.recentReviews)
+      
+      // Cache liked reviews if user is authenticated
+      if (user) {
+        const likedIds = new Set<string>()
+        const token = localStorage.getItem('accessToken')
+        if (token) {
+          const likePromises = response.data.recentReviews.map((review: any) => 
+            axios.get(`/api/reviews/${review.id}/likes`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }).then(res => {
+              if (res.data.isLiked) {
+                likedIds.add(review.id)
+              }
+            }).catch(() => {})
+          )
+          await Promise.all(likePromises)
+          setLikedReviews(likedIds)
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch restaurant:', error)
       toast.error('Failed to load restaurant details')
@@ -96,6 +123,107 @@ export default function RestaurantDetailPage() {
       } catch (error: any) {
         toast.error(error.response?.data?.error || 'Failed to claim restaurant')
       }
+    }
+  }
+
+  const handleLike = async (reviewId: string) => {
+    if (!isAuthenticated) {
+      toast(
+        <div>
+          <p>Please sign in to like reviews</p>
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" onClick={() => window.location.href = '/login'}>
+              Sign In
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => toast.dismiss()}>
+              Cancel
+            </Button>
+          </div>
+        </div>,
+        { duration: 5000 }
+      )
+      return
+    }
+    
+    try {
+      const token = localStorage.getItem('accessToken')
+      
+      if (likedReviews.has(reviewId)) {
+        await axios.delete(`/api/reviews/${reviewId}/like`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        setLikedReviews(new Set([...likedReviews].filter(id => id !== reviewId)))
+      } else {
+        await axios.post(`/api/reviews/${reviewId}/like`, {}, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        setLikedReviews(new Set([...likedReviews, reviewId]))
+      }
+      
+      // Update review like count in state
+      setRecentReviews(recentReviews.map(review => 
+        review.id === reviewId
+          ? { 
+              ...review, 
+              _count: { 
+                ...review._count, 
+                likes: review._count.likes + (likedReviews.has(reviewId) ? -1 : 1) 
+              } 
+            }
+          : review
+      ))
+    } catch (error: any) {
+      console.error('Failed to like review:', error)
+      if (error.response?.status === 401) {
+        toast.error('Please login to like reviews')
+      } else {
+        toast.error('Failed to update like')
+      }
+    }
+  }
+  
+  const handleComment = (reviewId: string) => {
+    if (!isAuthenticated) {
+      toast(
+        <div>
+          <p>Please sign in to comment on reviews</p>
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" onClick={() => window.location.href = '/login'}>
+              Sign In
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => toast.dismiss()}>
+              Cancel
+            </Button>
+          </div>
+        </div>,
+        { duration: 5000 }
+      )
+      return
+    }
+    
+    setExpandedComments(new Set(
+      expandedComments.has(reviewId)
+        ? [...expandedComments].filter(id => id !== reviewId)
+        : [...expandedComments, reviewId]
+    ))
+  }
+
+  const handleShare = async (review: any) => {
+    const url = `${window.location.origin}/restaurants/${restaurant.id}#review-${review.id}`
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Review of ${restaurant.name}`,
+          text: review.content.substring(0, 100) + '...',
+          url,
+        })
+      } catch (error) {
+        console.error('Error sharing:', error)
+      }
+    } else {
+      navigator.clipboard.writeText(url)
+      toast.success('Link copied to clipboard!')
     }
   }
   
@@ -258,59 +386,29 @@ export default function RestaurantDetailPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {recentReviews.map((review) => (
-                  <Card key={review.id}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-start gap-3">
-                          <Avatar
-                            src={review.user.avatar}
-                            alt={review.user.name}
-                            fallback={review.user.name}
+                  <div key={review.id}>
+                    <ReviewCard
+                      review={review}
+                      currentUserId={user?.id}
+                      onLike={() => handleLike(review.id)}
+                      onComment={() => handleComment(review.id)}
+                      onShare={() => handleShare(review)}
+                      showRestaurant={false}
+                    />
+                    
+                    {expandedComments.has(review.id) && (
+                      <Card className="mt-4 border-t-0 rounded-t-none">
+                        <CardContent className="pt-6">
+                          <CommentSection
+                            reviewId={review.id}
+                            currentUserId={user?.id}
                           />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold">{review.user.name}</p>
-                              <UserBadge role={review.user.role} size="sm" />
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="flex">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={`h-4 w-4 ${
-                                      i < review.rating
-                                        ? 'fill-yellow-500 text-yellow-500'
-                                        : 'text-gray-300'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                              <span>·</span>
-                              <span>{new Date(review.createdAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {review.title && (
-                        <h3 className="font-semibold mb-2">{review.title}</h3>
-                      )}
-                      <p className="text-gray-700 mb-4">{review.content}</p>
-                      
-                      <div className="flex items-center gap-4 text-sm">
-                        <button className="flex items-center gap-1 text-gray-500 hover:text-primary transition">
-                          <Heart className="h-4 w-4" />
-                          {review._count.likes}
-                        </button>
-                        <button className="flex items-center gap-1 text-gray-500 hover:text-primary transition">
-                          <MessageSquare className="h-4 w-4" />
-                          {review._count.comments}
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
