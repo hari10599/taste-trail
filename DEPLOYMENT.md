@@ -73,9 +73,6 @@ Complete guide to deploy Taste Trail (Next.js + PostgreSQL) to Render.com
    NEXTAUTH_SECRET=your-nextauth-secret-change-this-in-production
    NODE_ENV=production
 
-   # Auto-seed database on first run (set to true for initial deployment)
-   AUTO_SEED=true
-
    # Optional: Email settings (if you want email features)
    EMAIL_HOST=smtp.gmail.com
    EMAIL_PORT=587
