@@ -47,6 +47,7 @@ model User {
   mediaUploads  MediaUpload[] @relation("MediaUploads")
   followers     Follow[] @relation("UserFollowedBy")
   following     Follow[] @relation("UserFollows")
+  restaurantClaims RestaurantClaim[]
   
   @@index([email])
 }
@@ -102,6 +103,7 @@ model Restaurant {
   updatedAt    DateTime @updatedAt
 
   reviews      Review[]
+  claims       RestaurantClaim[]
   
   @@index([name])
   @@index([categories])
@@ -219,6 +221,32 @@ model InfluencerApplication {
   
   @@index([status])
   @@index([submittedAt])
+}
+
+model RestaurantClaim {
+  id                  String            @id @default(cuid())
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurantId        String
+  restaurant          Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  businessLicense     String?           // URL to uploaded document
+  ownershipProof      String?           // URL to uploaded document
+  taxDocument         String?           // URL to uploaded document
+  additionalDocuments String[]          // URLs to additional documents
+  phoneNumber         String
+  email               String
+  position            String            // Owner, Manager, etc.
+  message             String            // Why they should be approved
+  status              ApplicationStatus @default(PENDING)
+  submittedAt         DateTime          @default(now())
+  reviewedAt          DateTime?
+  reviewedBy          String?
+  reviewerNotes       String?
+  
+  @@unique([userId, restaurantId])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([restaurantId])
 }
 
 model RestaurantAnalytics {

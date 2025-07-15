@@ -99,6 +99,21 @@ const templates: Record<string, NotificationTemplate> = {
     type: 'welcome',
     title: () => 'Welcome to Taste Trail!',
     message: (data) => `Hi ${data.userName}! Welcome to Taste Trail. Start exploring restaurants and sharing your food experiences.`
+  },
+  restaurant_claim_received: {
+    type: 'restaurant_claim_received',
+    title: () => 'New restaurant claim',
+    message: (data) => `${data.claimantName} has submitted a claim for ${data.restaurantName} as ${data.position}. Review needed.`
+  },
+  restaurant_claim_approved: {
+    type: 'restaurant_claim_approved',
+    title: () => 'Restaurant claim approved',
+    message: (data) => `Congratulations! Your claim for ${data.restaurantName} has been approved. You are now the verified owner.`
+  },
+  restaurant_claim_rejected: {
+    type: 'restaurant_claim_rejected',
+    title: () => 'Restaurant claim update',
+    message: (data) => `Your claim for ${data.restaurantName} has been reviewed. ${data.notes || 'Please contact support for more information.'}`
   }
 }
 

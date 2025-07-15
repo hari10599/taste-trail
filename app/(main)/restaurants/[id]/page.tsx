@@ -10,7 +10,7 @@ import { UserBadge } from '@/components/ui/user-badge'
 import { 
   Star, MapPin, Phone, Globe, Clock, DollarSign, 
   Wifi, Car, Trees, Music, Users, Loader2, 
-  MessageSquare, Heart, Share2, Building
+  MessageSquare, Heart, Share2, Building, XCircle
 } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -20,6 +20,7 @@ import { CommentSection } from '@/components/CommentSection'
 import { ReportDialog } from '@/components/ReportDialog'
 import { EditReviewDialog } from '@/components/EditReviewDialog'
 import { DeleteReviewDialog } from '@/components/DeleteReviewDialog'
+import { ClaimRestaurantDialog } from '@/components/ClaimRestaurantDialog'
 
 const amenityIcons: { [key: string]: any } = {
   'WiFi': Wifi,
@@ -46,6 +47,8 @@ export default function RestaurantDetailPage() {
   })
   const [editingReview, setEditingReview] = useState<any>(null)
   const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null)
+  const [showClaimDialog, setShowClaimDialog] = useState(false)
+  const [userClaim, setUserClaim] = useState<any>(null)
   
   useEffect(() => {
     checkAuth()
@@ -57,6 +60,12 @@ export default function RestaurantDetailPage() {
       fetchRestaurant() // Refetch to get like status
     }
   }, [user])
+  
+  useEffect(() => {
+    if (user && restaurant && !restaurant.ownerId) {
+      checkUserClaim()
+    }
+  }, [user, restaurant])
   
   const checkAuth = async () => {
     const token = localStorage.getItem('accessToken')
@@ -73,6 +82,23 @@ export default function RestaurantDetailPage() {
       } catch (error) {
         console.error('Failed to fetch user:', error)
       }
+    }
+  }
+  
+  const checkUserClaim = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) return
+      
+      const response = await axios.get(`/api/restaurants/${params.id}/claim`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      
+      setUserClaim(response.data.claim)
+    } catch (error) {
+      console.error('Failed to check user claim:', error)
     }
   }
   
@@ -108,33 +134,6 @@ export default function RestaurantDetailPage() {
     }
   }
 
-  const handleClaimRestaurant = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please sign in to claim this restaurant')
-      return
-    }
-
-    if (confirm('Are you sure you want to claim ownership of this restaurant?')) {
-      try {
-        const token = localStorage.getItem('accessToken')
-        const response = await axios.post(
-          '/api/owner/restaurants',
-          { restaurantId: restaurant.id },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        )
-        toast.success('Restaurant claimed successfully!')
-        // Refresh the page to update the restaurant data
-        fetchRestaurant()
-        checkAuth() // Update user role
-      } catch (error: any) {
-        toast.error(error.response?.data?.error || 'Failed to claim restaurant')
-      }
-    }
-  }
 
   const handleLike = async (reviewId: string) => {
     if (!isAuthenticated) {
@@ -285,6 +284,18 @@ export default function RestaurantDetailPage() {
     toast.success('Review deleted successfully')
   }
   
+  const handleClaimRestaurant = () => {
+    if (!isAuthenticated) {
+      toast('Please sign in to claim this restaurant')
+      return
+    }
+    setShowClaimDialog(true)
+  }
+  
+  const handleClaimSuccess = () => {
+    fetchRestaurant() // Refresh restaurant data
+  }
+  
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -338,13 +349,33 @@ export default function RestaurantDetailPage() {
               </Link>
             )}
             {!restaurant.ownerId && user && user.role !== 'OWNER' && (
-              <Button 
-                variant="outline" 
-                onClick={handleClaimRestaurant}
-              >
-                <Building className="h-4 w-4 mr-2" />
-                Claim Restaurant
-              </Button>
+              <>
+                {!userClaim && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleClaimRestaurant}
+                  >
+                    <Building className="h-4 w-4 mr-2" />
+                    Claim Restaurant
+                  </Button>
+                )}
+                {userClaim && userClaim.status === 'PENDING' && (
+                  <Badge variant="outline" className="text-yellow-600 border-yellow-600 px-3 py-2">
+                    <Clock className="h-4 w-4 mr-2" />
+                    Claim Pending
+                  </Badge>
+                )}
+                {userClaim && userClaim.status === 'REJECTED' && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleClaimRestaurant}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Resubmit Claim
+                  </Button>
+                )}
+              </>
             )}
             {restaurant.ownerId === user?.id && (
               <Link href={`/owner/restaurants/${restaurant.id}`}>
@@ -599,6 +630,17 @@ export default function RestaurantDetailPage() {
           isOpen={!!deletingReviewId}
           onClose={() => setDeletingReviewId(null)}
           onSuccess={handleDeleteSuccess}
+        />
+      )}
+      
+      {/* Claim Restaurant Dialog */}
+      {restaurant && (
+        <ClaimRestaurantDialog
+          restaurantId={restaurant.id}
+          restaurantName={restaurant.name}
+          isOpen={showClaimDialog}
+          onClose={() => setShowClaimDialog(false)}
+          onSuccess={handleClaimSuccess}
         />
       )}
     </div>

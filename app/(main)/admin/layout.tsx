@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { 
   LayoutDashboard, Users, Flag, FileText, Shield, 
-  BarChart3, Settings, ChevronLeft, AlertTriangle, Bell, UserCheck
+  BarChart3, Settings, ChevronLeft, AlertTriangle, Bell, UserCheck, Building
 } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -109,6 +109,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       icon: UserCheck,
       href: '/admin/influencer-applications',
       description: 'Review influencer applications'
+    },
+    {
+      label: 'Restaurant Claims',
+      icon: Building,
+      href: '/admin/restaurant-claims',
+      description: 'Review restaurant ownership claims'
     }
   ]
 
