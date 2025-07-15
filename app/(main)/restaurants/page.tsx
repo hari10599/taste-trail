@@ -6,8 +6,9 @@ import { RestaurantCard } from '@/components/RestaurantCard'
 import { RestaurantFilters } from '@/components/RestaurantFilters'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Loader2, Grid3x3, List } from 'lucide-react'
+import { Search, Loader2, Grid3x3, List, Plus } from 'lucide-react'
 import axios from 'axios'
+import { CreateRestaurantModal } from '@/components/CreateRestaurantModal'
 
 export default function RestaurantsPage() {
   const [restaurants, setRestaurants] = useState<any[]>([])
@@ -15,6 +16,7 @@ export default function RestaurantsPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [showCreateModal, setShowCreateModal] = useState(false)
   
   const [filters, setFilters] = useState({
     search: '',
@@ -60,12 +62,27 @@ export default function RestaurantsPage() {
     setPage(1)
   }
   
+  const handleRestaurantCreated = (newRestaurant: any) => {
+    setRestaurants([newRestaurant, ...restaurants])
+    setShowCreateModal(false)
+    fetchRestaurants() // Refresh the list
+  }
+  
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
-          Discover Restaurants
-        </h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Discover Restaurants
+          </h1>
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Restaurant
+          </Button>
+        </div>
         
         {/* Search Bar */}
         <div className="flex gap-4 mb-6">
@@ -208,6 +225,13 @@ export default function RestaurantsPage() {
           )}
         </div>
       </div>
+      
+      {/* Create Restaurant Modal */}
+      <CreateRestaurantModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onRestaurantCreated={handleRestaurantCreated}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
+import { verifyAccessToken } from '@/lib/auth/jwt'
 import { z } from 'zod'
 
 // GET /api/restaurants - Get restaurants with filters
@@ -112,32 +113,33 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Schema for creating a restaurant (admin/owner only)
+// Schema for creating a restaurant
 const createRestaurantSchema = z.object({
   name: z.string().min(2).max(100),
   description: z.string().min(10).max(500),
   address: z.string().min(5),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  latitude: z.number().default(0), // Default to 0 if not provided
+  longitude: z.number().default(0), // Default to 0 if not provided
   phone: z.string().optional(),
-  website: z.string().url().optional(),
-  priceRange: z.number().min(1).max(4),
-  categories: z.array(z.string()).min(1),
-  amenities: z.array(z.string()),
+  website: z.string().url().optional().or(z.literal('')),
+  email: z.string().email().optional().or(z.literal('')),
+  priceRange: z.number().min(1).max(4).default(2),
+  categories: z.array(z.string()).default([]),
+  amenities: z.array(z.string()).default([]),
   coverImage: z.string().optional(),
-  images: z.array(z.string()).max(50),
+  images: z.array(z.string()).default([]),
   openingHours: z.object({
-    monday: z.object({ open: z.string(), close: z.string() }),
-    tuesday: z.object({ open: z.string(), close: z.string() }),
-    wednesday: z.object({ open: z.string(), close: z.string() }),
-    thursday: z.object({ open: z.string(), close: z.string() }),
-    friday: z.object({ open: z.string(), close: z.string() }),
-    saturday: z.object({ open: z.string(), close: z.string() }),
-    sunday: z.object({ open: z.string(), close: z.string() }),
-  }),
+    monday: z.object({ open: z.string(), close: z.string() }).optional(),
+    tuesday: z.object({ open: z.string(), close: z.string() }).optional(),
+    wednesday: z.object({ open: z.string(), close: z.string() }).optional(),
+    thursday: z.object({ open: z.string(), close: z.string() }).optional(),
+    friday: z.object({ open: z.string(), close: z.string() }).optional(),
+    saturday: z.object({ open: z.string(), close: z.string() }).optional(),
+    sunday: z.object({ open: z.string(), close: z.string() }).optional(),
+  }).default({}),
 })
 
-// POST /api/restaurants - Create a restaurant (admin/owner only)
+// POST /api/restaurants - Create a restaurant
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -149,14 +151,40 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // For now, we'll skip role checking to allow testing
-    // In production, verify the user is ADMIN or OWNER
+    const token = authHeader.split(' ')[1]
+    const payload = verifyAccessToken(token)
     
     const body = await request.json()
     const validatedData = createRestaurantSchema.parse(body)
     
+    // Get user info to check role
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, role: true }
+    })
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+    
     const restaurant = await prisma.restaurant.create({
-      data: validatedData,
+      data: {
+        ...validatedData,
+        // Set the creator as the owner if they are an OWNER role
+        ownerId: user.role === 'OWNER' ? user.id : null,
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+      },
     })
     
     return NextResponse.json({ restaurant }, { status: 201 })
