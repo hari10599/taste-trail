@@ -47,6 +47,11 @@ const templates: Record<string, NotificationTemplate> = {
     title: () => 'Restaurant owner responded',
     message: (data) => `${data.restaurant.name} responded to your review`
   },
+  follow: {
+    type: 'follow',
+    title: () => 'New follower',
+    message: (data) => `${data.follower.name} started following you`
+  },
   influencer_approved: {
     type: 'influencer_approved',
     title: () => 'Influencer application approved',

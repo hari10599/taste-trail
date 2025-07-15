@@ -21,6 +21,27 @@ export async function GET(request: NextRequest) {
       isHidden: false,
     }
     
+    // Exclude reviews with pending or investigating reports
+    const reportedReviewIds = await prisma.report.findMany({
+      where: {
+        type: 'REVIEW',
+        status: {
+          in: ['PENDING', 'INVESTIGATING']
+        }
+      },
+      select: {
+        targetId: true
+      }
+    })
+    
+    const excludedIds = reportedReviewIds.map(r => r.targetId)
+    
+    if (excludedIds.length > 0) {
+      where.id = {
+        notIn: excludedIds
+      }
+    }
+    
     if (restaurantId) {
       where.restaurantId = restaurantId
     }
@@ -44,7 +65,32 @@ export async function GET(request: NextRequest) {
         }
         break
       case 'following':
-        // This would require a following system - for now, we'll skip
+        // Get current user from token if available
+        const authHeader = request.headers.get('authorization')
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          try {
+            const token = authHeader.split(' ')[1]
+            const payload = verifyAccessToken(token)
+            
+            // Get users that current user is following
+            const following = await prisma.follow.findMany({
+              where: { followerId: payload.userId },
+              select: { followingId: true }
+            })
+            
+            const followingIds = following.map(f => f.followingId)
+            
+            if (followingIds.length > 0) {
+              where.userId = { in: followingIds }
+            } else {
+              // If not following anyone, return empty results
+              where.userId = { in: [] }
+            }
+          } catch (error) {
+            // If token is invalid, just skip the filter
+            console.error('Failed to verify token for following filter:', error)
+          }
+        }
         break
     }
     

@@ -61,9 +61,9 @@ export function ReportDialog({
       const token = localStorage.getItem('accessToken')
       await axios.post('/api/reports', {
         targetId,
-        targetType,
+        type: targetType.toUpperCase(),
         reason,
-        details: details.trim() || undefined
+        description: details.trim() || undefined
       }, {
         headers: { Authorization: `Bearer ${token}` }
       })

@@ -45,6 +45,8 @@ model User {
   strikes       UserStrike[] @relation("UserStrikes")
   notificationPrefs NotificationPreference? @relation("NotificationPrefs")
   mediaUploads  MediaUpload[] @relation("MediaUploads")
+  followers     Follow[] @relation("UserFollowedBy")
+  following     Follow[] @relation("UserFollows")
   
   @@index([email])
 }
@@ -378,5 +380,19 @@ model MediaUpload {
   @@index([userId])
   @@index([fileId])
   @@index([folder])
+  @@index([createdAt])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  follower    User     @relation("UserFollows", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("UserFollowedBy", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
   @@index([createdAt])
 }

@@ -1,0 +1,76 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db/prisma'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const skip = (page - 1) * limit
+    
+    const { id: userId } = await params
+    
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    })
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+    
+    // Get followers with pagination
+    const [followers, total] = await Promise.all([
+      prisma.follow.findMany({
+        where: { followingId: userId },
+        include: {
+          follower: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              role: true,
+              verified: true,
+              _count: {
+                select: {
+                  reviews: true,
+                  followers: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit
+      }),
+      prisma.follow.count({ where: { followingId: userId } })
+    ])
+    
+    return NextResponse.json({
+      followers: followers.map(f => ({
+        ...f.follower,
+        followedAt: f.createdAt
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
+  } catch (error) {
+    console.error('Get followers error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch followers' },
+      { status: 500 }
+    )
+  }
+}

@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { StarRating } from '@/components/ui/star-rating'
 import { UserBadge } from '@/components/ui/user-badge'
+import { FollowButton } from '@/components/FollowButton'
 import { 
   Heart, MessageSquare, Share2, MoreVertical, 
   Edit, Trash2, Flag, Calendar, DollarSign 
@@ -82,7 +83,7 @@ export function ReviewCard({
                 size="md"
               />
             </Link>
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-2">
                 <Link href={`/users/${review.user.id}`} className="font-semibold hover:underline">
                   {review.user.name}
@@ -96,6 +97,15 @@ export function ReviewCard({
               </div>
             </div>
           </div>
+          
+          {/* Follow button */}
+          {currentUserId && currentUserId !== review.user.id && (
+            <FollowButton 
+              userId={review.user.id} 
+              size="sm" 
+              className="mr-2"
+            />
+          )}
           
           {/* Menu */}
           {(isOwner || currentUserId) && (

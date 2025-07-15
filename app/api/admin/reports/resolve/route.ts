@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (report.status !== 'PENDING') {
+    if (report.status !== 'PENDING' && report.status !== 'INVESTIGATING') {
       return NextResponse.json(
         { error: 'Report has already been processed' },
         { status: 400 }

@@ -299,8 +299,31 @@ export default function AdminReportsPage() {
                         </div>
                       </div>
 
-                      {report.status === 'PENDING' && (
+                      {(report.status === 'PENDING' || report.status === 'INVESTIGATING') && (
                         <div className="flex gap-2">
+                          {report.status === 'PENDING' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const token = localStorage.getItem('accessToken')
+                                  await axios.patch(`/api/admin/reports/${report.id}/status`, {
+                                    status: 'INVESTIGATING'
+                                  }, {
+                                    headers: { Authorization: `Bearer ${token}` }
+                                  })
+                                  toast.success('Report marked as investigating')
+                                  fetchReports()
+                                } catch (error) {
+                                  toast.error('Failed to update report status')
+                                }
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              Investigate
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -309,14 +332,26 @@ export default function AdminReportsPage() {
                             <XCircle className="h-4 w-4 mr-1" />
                             Reject
                           </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => openResolveDialog(report, 'approve')}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            <Ban className="h-4 w-4 mr-1" />
-                            Take Action
-                          </Button>
+                          {report.type === 'REVIEW' && (
+                            <Button
+                              size="sm"
+                              onClick={() => openResolveDialog(report, 'approve')}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              <Ban className="h-4 w-4 mr-1" />
+                              Take Down
+                            </Button>
+                          )}
+                          {report.type !== 'REVIEW' && (
+                            <Button
+                              size="sm"
+                              onClick={() => openResolveDialog(report, 'approve')}
+                              className="bg-orange-600 hover:bg-orange-700"
+                            >
+                              <AlertOctagon className="h-4 w-4 mr-1" />
+                              Take Action
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -366,11 +401,15 @@ export default function AdminReportsPage() {
               ) : (
                 <XCircle className="h-5 w-5 text-gray-500" />
               )}
-              {resolveDialog.action === 'approve' ? 'Take Action' : 'Reject Report'}
+              {resolveDialog.action === 'approve' 
+                ? (resolveDialog.report?.type === 'REVIEW' ? 'Take Down Review' : 'Take Action')
+                : 'Reject Report'}
             </DialogTitle>
             <DialogDescription>
               {resolveDialog.action === 'approve' 
-                ? 'This will approve the report and take moderation action against the reported content.'
+                ? (resolveDialog.report?.type === 'REVIEW' 
+                  ? 'This will hide the review from public view and notify the author.'
+                  : 'This will approve the report and take moderation action against the reported content.')
                 : 'This will reject the report as invalid or not actionable.'
               }
             </DialogDescription>
@@ -397,7 +436,9 @@ export default function AdminReportsPage() {
               onClick={handleResolveReport}
               className={resolveDialog.action === 'approve' ? 'bg-red-600 hover:bg-red-700' : ''}
             >
-              {resolveDialog.action === 'approve' ? 'Take Action' : 'Reject Report'}
+              {resolveDialog.action === 'approve' 
+                ? (resolveDialog.report?.type === 'REVIEW' ? 'Take Down Review' : 'Take Action')
+                : 'Reject Report'}
             </Button>
           </DialogFooter>
         </DialogContent>

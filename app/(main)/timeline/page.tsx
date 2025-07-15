@@ -103,9 +103,13 @@ export default function TimelinePage() {
         sortBy: currentFilter === 'trending' ? 'trending' : 'createdAt',
         sortOrder: 'desc',
         filter: currentFilter,
+        timestamp: Date.now().toString(), // Force cache bypass
       })
       
-      const response = await axios.get(`/api/reviews?${params}`)
+      const token = localStorage.getItem('accessToken')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      
+      const response = await axios.get(`/api/reviews?${params}`, { headers })
       
       if (reset) {
         setReviews(response.data.reviews)
@@ -118,7 +122,6 @@ export default function TimelinePage() {
       
       // Cache liked reviews
       const likedIds = new Set<string>()
-      const token = localStorage.getItem('accessToken')
       if (token && user) {
         const likePromises = response.data.reviews.map((review: any) => 
           axios.get(`/api/reviews/${review.id}/likes`, {
@@ -279,12 +282,30 @@ export default function TimelinePage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
-          Food Timeline
-        </h1>
-        <p className="text-gray-600">
-          Discover what people are saying about restaurants
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">
+              Food Timeline
+            </h1>
+            <p className="text-gray-600">
+              Discover what people are saying about restaurants
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setReviews([])
+              setPage(1)
+              setHasMore(true)
+              fetchReviews(true)
+            }}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
       
       {/* Stats */}
