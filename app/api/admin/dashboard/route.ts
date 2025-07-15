@@ -14,7 +14,24 @@ export async function GET(request: NextRequest) {
     }
     
     const token = authHeader.split(' ')[1]
-    const payload = verifyAccessToken(token)
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Invalid authorization token format' },
+        { status: 401 }
+      )
+    }
+    
+    let payload
+    try {
+      payload = verifyAccessToken(token)
+    } catch (error) {
+      console.error('JWT verification failed in admin dashboard:', error)
+      return NextResponse.json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      )
+    }
     
     // Check if user is admin or moderator
     const user = await prisma.user.findUnique({
@@ -79,37 +96,55 @@ export async function GET(request: NextRequest) {
       })
     ])
 
-    // Fetch report statistics
-    const [
-      pendingReports,
-      resolvedReports,
-      totalReports
-    ] = await Promise.all([
-      prisma.report.count({ where: { status: 'PENDING' } }),
-      prisma.report.count({ where: { status: 'RESOLVED' } }),
-      prisma.report.count()
-    ])
+    // Fetch report statistics (with error handling)
+    let pendingReports = 0
+    let resolvedReports = 0
+    let totalReports = 0
+    
+    try {
+      [
+        pendingReports,
+        resolvedReports,
+        totalReports
+      ] = await Promise.all([
+        prisma.report.count({ where: { status: 'PENDING' } }),
+        prisma.report.count({ where: { status: 'RESOLVED' } }),
+        prisma.report.count()
+      ])
+    } catch (reportError) {
+      console.error('Report statistics error:', reportError)
+      // Continue with default values
+    }
 
-    // Fetch moderation statistics
-    const [
-      moderationActionsThisMonth,
-      bannedUsers,
-      flaggedContent
-    ] = await Promise.all([
-      prisma.moderationAction.count({
-        where: { createdAt: { gte: startOfMonth } }
-      }),
-      prisma.moderationAction.count({
-        where: {
-          type: { in: ['PERMANENT_BAN', 'TEMPORARY_BAN'] },
-          OR: [
-            { expiresAt: null }, // Permanent bans
-            { expiresAt: { gt: now } } // Active temporary bans
-          ]
-        }
-      }),
-      prisma.contentFlag.count()
-    ])
+    // Fetch moderation statistics (with error handling)
+    let moderationActionsThisMonth = 0
+    let bannedUsers = 0
+    let flaggedContent = 0
+    
+    try {
+      [
+        moderationActionsThisMonth,
+        bannedUsers,
+        flaggedContent
+      ] = await Promise.all([
+        prisma.moderationAction.count({
+          where: { createdAt: { gte: startOfMonth } }
+        }),
+        prisma.moderationAction.count({
+          where: {
+            type: { in: ['PERMANENT_BAN', 'TEMPORARY_BAN'] },
+            OR: [
+              { expiresAt: null }, // Permanent bans
+              { expiresAt: { gt: now } } // Active temporary bans
+            ]
+          }
+        }),
+        prisma.contentFlag.count()
+      ])
+    } catch (moderationError) {
+      console.error('Moderation statistics error:', moderationError)
+      // Continue with default values
+    }
 
     const stats = {
       users: {

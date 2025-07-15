@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, X, Plus } from 'lucide-react'
+import { Loader2, X, Plus, Check, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 
@@ -50,6 +50,15 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
   const [isLoading, setIsLoading] = useState(false)
   const [categories, setCategories] = useState<string[]>([])
   const [newCategory, setNewCategory] = useState('')
+  const [nameAvailability, setNameAvailability] = useState<{
+    checking: boolean
+    available: boolean | null
+    message: string
+  }>({
+    checking: false,
+    available: null,
+    message: ''
+  })
 
   const {
     register,
@@ -66,6 +75,48 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
   })
 
   const priceRange = watch('priceRange')
+  const watchedName = watch('name')
+
+  const checkNameAvailability = useCallback(async (name: string) => {
+    if (!name || name.length < 2) {
+      setNameAvailability({ checking: false, available: null, message: '' })
+      return
+    }
+
+    setNameAvailability({ checking: true, available: null, message: '' })
+    
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await axios.get(`/api/restaurants/check-name?name=${encodeURIComponent(name)}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      
+      setNameAvailability({
+        checking: false,
+        available: response.data.available,
+        message: response.data.available ? 'Name is available' : 'Name is already taken'
+      })
+    } catch (error) {
+      setNameAvailability({
+        checking: false,
+        available: null,
+        message: 'Could not check availability'
+      })
+    }
+  }, [])
+
+  // Debounced name check
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (watchedName) {
+        checkNameAvailability(watchedName)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [watchedName, checkNameAvailability])
 
   const addCategory = (category: string) => {
     if (category && !categories.includes(category)) {
@@ -79,6 +130,12 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
   }
 
   const onSubmit = async (data: RestaurantFormData) => {
+    // Check if name is available before submitting
+    if (nameAvailability.available === false) {
+      toast.error('Please choose a different restaurant name')
+      return
+    }
+    
     setIsLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
@@ -98,6 +155,7 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
       onRestaurantCreated(response.data.restaurant)
       reset()
       setCategories([])
+      setNameAvailability({ checking: false, available: null, message: '' })
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to create restaurant')
     } finally {
@@ -108,6 +166,7 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
   const handleClose = () => {
     reset()
     setCategories([])
+    setNameAvailability({ checking: false, available: null, message: '' })
     onClose()
   }
 
@@ -126,14 +185,32 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
           <div className="space-y-4">
             <div>
               <Label htmlFor="name">Restaurant Name *</Label>
-              <Input
-                id="name"
-                placeholder="e.g., The Golden Spoon"
-                {...register('name')}
-                className={errors.name ? 'border-red-500' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="name"
+                  placeholder="e.g., The Golden Spoon"
+                  {...register('name')}
+                  className={`pr-10 ${errors.name ? 'border-red-500' : nameAvailability.available === false ? 'border-red-500' : nameAvailability.available === true ? 'border-green-500' : ''}`}
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  {nameAvailability.checking && (
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  )}
+                  {!nameAvailability.checking && nameAvailability.available === true && (
+                    <Check className="h-4 w-4 text-green-500" />
+                  )}
+                  {!nameAvailability.checking && nameAvailability.available === false && (
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                  )}
+                </div>
+              </div>
               {errors.name && (
                 <p className="text-sm text-red-500 mt-1">{errors.name.message}</p>
+              )}
+              {!errors.name && nameAvailability.message && (
+                <p className={`text-sm mt-1 ${nameAvailability.available ? 'text-green-600' : 'text-red-600'}`}>
+                  {nameAvailability.message}
+                </p>
               )}
             </div>
 
@@ -283,7 +360,10 @@ export function CreateRestaurantModal({ isOpen, onClose, onRestaurantCreated }: 
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              disabled={isLoading || nameAvailability.available === false || nameAvailability.checking}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

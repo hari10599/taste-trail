@@ -18,6 +18,7 @@ interface ClaimRestaurantDialogProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
+  isDispute?: boolean
 }
 
 export function ClaimRestaurantDialog({
@@ -25,7 +26,8 @@ export function ClaimRestaurantDialog({
   restaurantName,
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  isDispute = false
 }: ClaimRestaurantDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -90,9 +92,20 @@ export function ClaimRestaurantDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Claim Restaurant Ownership</DialogTitle>
+          <DialogTitle>
+            {isDispute ? 'Dispute Restaurant Ownership' : 'Claim Restaurant Ownership'}
+          </DialogTitle>
           <DialogDescription>
-            Submit your claim for <strong>{restaurantName}</strong>. Please provide accurate information and supporting documents.
+            {isDispute ? (
+              <>
+                Submit your dispute for <strong>{restaurantName}</strong>. This restaurant is currently claimed by another user. 
+                Please provide strong evidence of your ownership. Both parties will be notified of the admin's decision.
+              </>
+            ) : (
+              <>
+                Submit your claim for <strong>{restaurantName}</strong>. Please provide accurate information and supporting documents.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -100,7 +113,16 @@ export function ClaimRestaurantDialog({
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              All claims are thoroughly reviewed. Providing false information may result in account suspension.
+              {isDispute ? (
+                <>
+                  <strong>Dispute Notice:</strong> You are disputing an existing ownership claim. 
+                  Provide strong evidence of your ownership. False disputes may result in account suspension.
+                </>
+              ) : (
+                <>
+                  All claims are thoroughly reviewed. Providing false information may result in account suspension.
+                </>
+              )}
             </AlertDescription>
           </Alert>
 

@@ -105,6 +105,16 @@ const templates: Record<string, NotificationTemplate> = {
     title: () => 'New restaurant claim',
     message: (data) => `${data.claimantName} has submitted a claim for ${data.restaurantName} as ${data.position}. Review needed.`
   },
+  restaurant_claim_dispute: {
+    type: 'restaurant_claim_dispute',
+    title: () => 'Restaurant ownership dispute',
+    message: (data) => `${data.claimantName} is disputing your ownership of ${data.restaurantName}. They claim to be the ${data.position}. Admin review required.`
+  },
+  restaurant_claim_dispute_admin: {
+    type: 'restaurant_claim_dispute_admin',
+    title: () => 'Restaurant ownership dispute',
+    message: (data) => `${data.claimantName} is disputing ownership of ${data.restaurantName} (already owned). This requires careful review of both claims.`
+  },
   restaurant_claim_approved: {
     type: 'restaurant_claim_approved',
     title: () => 'Restaurant claim approved',

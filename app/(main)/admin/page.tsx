@@ -75,8 +75,23 @@ export default function AdminDashboard() {
 
       setStats(statsResponse.data)
       setRecentActivity(activityResponse.data.activities)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch dashboard data:', error)
+      
+      // Check for authentication errors
+      if (error.response?.status === 401) {
+        console.error('Authentication failed, redirecting to login')
+        localStorage.removeItem('accessToken')
+        window.location.href = '/login'
+        return
+      }
+      
+      // Check for permission errors
+      if (error.response?.status === 403) {
+        console.error('Insufficient permissions for admin dashboard')
+        window.location.href = '/dashboard'
+        return
+      }
     } finally {
       setLoading(false)
     }

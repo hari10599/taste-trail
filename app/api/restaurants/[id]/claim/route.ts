@@ -58,10 +58,16 @@ export async function POST(
     
     // Check if restaurant already has an owner
     if (restaurant.ownerId) {
-      return NextResponse.json(
-        { error: 'This restaurant already has a verified owner' },
-        { status: 400 }
-      )
+      // Allow dispute/reclaim if user is different from current owner
+      if (restaurant.ownerId === userId) {
+        return NextResponse.json(
+          { error: 'You already own this restaurant' },
+          { status: 400 }
+        )
+      }
+      
+      // This will be a dispute/reclaim case
+      console.log(`Dispute claim initiated for restaurant ${restaurantId} by user ${userId}`)
     }
     
     // Check if user already has a pending claim for this restaurant
@@ -88,6 +94,7 @@ export async function POST(
     })
     
     // Create the claim
+    const isDispute = !!restaurant.ownerId
     const claim = await prisma.restaurantClaim.create({
       data: {
         userId,
@@ -100,7 +107,8 @@ export async function POST(
         email: validatedData.email,
         position: validatedData.position,
         message: validatedData.message,
-        status: 'PENDING'
+        status: 'PENDING',
+        isDispute
       }
     })
     
@@ -110,21 +118,39 @@ export async function POST(
       select: { id: true }
     })
     
-    for (const admin of admins) {
-      await createNotification('restaurant_claim_received', admin.id, {
+    // If it's a dispute, also notify the current owner
+    if (isDispute && restaurant.ownerId) {
+      await createNotification('restaurant_claim_dispute', restaurant.ownerId, {
         claimantName: user?.name || 'Unknown',
-        claimantEmail: user?.email || 'Unknown',
         restaurantName: restaurant.name,
         claimId: claim.id,
         position: validatedData.position
       })
     }
     
+    for (const admin of admins) {
+      await createNotification(
+        isDispute ? 'restaurant_claim_dispute_admin' : 'restaurant_claim_received', 
+        admin.id, 
+        {
+          claimantName: user?.name || 'Unknown',
+          claimantEmail: user?.email || 'Unknown',
+          restaurantName: restaurant.name,
+          claimId: claim.id,
+          position: validatedData.position,
+          isDispute
+        }
+      )
+    }
+    
     return NextResponse.json({
-      message: 'Claim submitted successfully. We will review your application and notify you of our decision.',
+      message: isDispute 
+        ? 'Dispute claim submitted successfully. We will review your application and the existing ownership claim. Both parties will be notified of our decision.'
+        : 'Claim submitted successfully. We will review your application and notify you of our decision.',
       claim: {
         id: claim.id,
         status: claim.status,
+        isDispute,
         submittedAt: claim.submittedAt
       }
     })

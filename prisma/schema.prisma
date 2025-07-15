@@ -243,6 +243,7 @@ model RestaurantClaim {
   position            String            // Owner, Manager, etc.
   message             String            // Why they should be approved
   status              ApplicationStatus @default(PENDING)
+  isDispute           Boolean           @default(false) // True if claiming already owned restaurant
   submittedAt         DateTime          @default(now())
   reviewedAt          DateTime?
   reviewedBy          String?
@@ -252,6 +253,7 @@ model RestaurantClaim {
   @@index([status])
   @@index([submittedAt])
   @@index([restaurantId])
+  @@index([isDispute])
 }
 
 model RestaurantAnalytics {

@@ -313,7 +313,7 @@ export function NotificationBell() {
         }
         
         // Show toast for important notifications (only after initial connection)
-        if (initialConnectionMade && ['like', 'comment', 'reply', 'new_review', 'influencer_application_received', 'restaurant_claim_received'].includes(data.payload.type)) {
+        if (initialConnectionMade && ['like', 'comment', 'reply', 'new_review', 'influencer_application_received', 'restaurant_claim_received', 'restaurant_claim_dispute', 'restaurant_claim_dispute_admin'].includes(data.payload.type)) {
           toast.success(data.payload.title, {
             duration: 4000,
             icon: getNotificationIcon(data.payload.type)
@@ -428,9 +428,12 @@ export function NotificationBell() {
     // Handle admin notifications
     switch (notification.type) {
       case 'restaurant_claim_received':
+      case 'restaurant_claim_dispute_admin':
         return '/admin/restaurant-claims'
       case 'influencer_application_received':
         return '/admin/influencer-applications'
+      case 'restaurant_claim_dispute':
+        return '/profile/restaurant-claims'
       default:
         return '#'
     }
@@ -455,6 +458,10 @@ export function NotificationBell() {
         return '❌'
       case 'restaurant_claim_received':
         return '🏪'
+      case 'restaurant_claim_dispute':
+        return '⚠️'
+      case 'restaurant_claim_dispute_admin':
+        return '⚖️'
       case 'restaurant_claim_approved':
         return '✅'
       case 'restaurant_claim_rejected':
@@ -545,7 +552,8 @@ export function NotificationBell() {
               ) : (
                 <div className="divide-y">
                   {notifications.map((notification) => {
-                    const isAdminNotification = ['restaurant_claim_received', 'influencer_application_received'].includes(notification.type)
+                    const isAdminNotification = ['restaurant_claim_received', 'restaurant_claim_dispute_admin', 'influencer_application_received'].includes(notification.type)
+                    const isDisputeNotification = ['restaurant_claim_dispute'].includes(notification.type)
                     return (
                     <Link
                       key={notification.id}
@@ -553,7 +561,9 @@ export function NotificationBell() {
                       onClick={() => handleNotificationClick(notification)}
                       className={`block p-4 hover:bg-gray-50 transition ${
                         !notification.read 
-                          ? (isAdminNotification ? 'bg-orange-50 border-l-4 border-orange-400' : 'bg-blue-50') 
+                          ? (isAdminNotification ? 'bg-orange-50 border-l-4 border-orange-400' : 
+                             isDisputeNotification ? 'bg-red-50 border-l-4 border-red-400' : 
+                             'bg-blue-50') 
                           : ''
                       }`}
                     >

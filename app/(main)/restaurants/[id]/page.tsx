@@ -348,7 +348,7 @@ export default function RestaurantDetailPage() {
                 <Button>Write a Review</Button>
               </Link>
             )}
-            {!restaurant.ownerId && user && user.role !== 'OWNER' && (
+            {user && user.role !== 'OWNER' && restaurant.ownerId !== user.id && (
               <>
                 {!userClaim && (
                   <Button 
@@ -356,13 +356,13 @@ export default function RestaurantDetailPage() {
                     onClick={handleClaimRestaurant}
                   >
                     <Building className="h-4 w-4 mr-2" />
-                    Claim Restaurant
+                    {restaurant.ownerId ? 'Dispute Ownership' : 'Claim Restaurant'}
                   </Button>
                 )}
                 {userClaim && userClaim.status === 'PENDING' && (
                   <Badge variant="outline" className="text-yellow-600 border-yellow-600 px-3 py-2">
                     <Clock className="h-4 w-4 mr-2" />
-                    Claim Pending
+                    {userClaim.isDispute ? 'Dispute Pending' : 'Claim Pending'}
                   </Badge>
                 )}
                 {userClaim && userClaim.status === 'REJECTED' && (
@@ -372,7 +372,7 @@ export default function RestaurantDetailPage() {
                     className="text-red-600 hover:text-red-700"
                   >
                     <XCircle className="h-4 w-4 mr-2" />
-                    Resubmit Claim
+                    {userClaim.isDispute ? 'Resubmit Dispute' : 'Resubmit Claim'}
                   </Button>
                 )}
               </>
@@ -641,6 +641,7 @@ export default function RestaurantDetailPage() {
           isOpen={showClaimDialog}
           onClose={() => setShowClaimDialog(false)}
           onSuccess={handleClaimSuccess}
+          isDispute={!!restaurant.ownerId}
         />
       )}
     </div>

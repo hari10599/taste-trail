@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,6 +18,7 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
@@ -160,7 +161,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <nav className="space-y-2">
               {navigationItems.map((item) => {
                 const Icon = item.icon
-                const isActive = typeof window !== 'undefined' && window.location.pathname === item.href
+                const isActive = pathname === item.href
                 
                 return (
                   <Link

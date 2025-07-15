@@ -170,6 +170,23 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // Check if restaurant name already exists
+    const existingRestaurant = await prisma.restaurant.findFirst({
+      where: {
+        name: {
+          equals: validatedData.name,
+          mode: 'insensitive'
+        }
+      }
+    })
+    
+    if (existingRestaurant) {
+      return NextResponse.json(
+        { error: 'A restaurant with this name already exists' },
+        { status: 409 }
+      )
+    }
+    
     const restaurant = await prisma.restaurant.create({
       data: {
         ...validatedData,
