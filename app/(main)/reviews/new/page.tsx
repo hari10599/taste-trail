@@ -66,7 +66,9 @@ function NewReviewContent() {
         params: { q: searchQuery },
       })
       setSearchResults(response.data.restaurants || [])
+      setShowDropdown(false) // Hide dropdown when searching
     } catch (error) {
+      console.error('Search error:', error)
       toast.error('Failed to search restaurants')
     } finally {
       setIsSearching(false)
@@ -191,7 +193,7 @@ function NewReviewContent() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Star className="h-3 w-3 text-yellow-500" />
-                            {restaurant.avgRating > 0 ? restaurant.avgRating.toFixed(1) : 'No rating'}
+                            {restaurant._count?.reviews > 0 ? `${restaurant._count.reviews} reviews` : 'No reviews'}
                           </span>
                         </div>
                       </button>

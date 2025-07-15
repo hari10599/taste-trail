@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || ''
     
     if (!query || query.length < 2) {
-      return NextResponse.json({ results: [] })
+      return NextResponse.json({ restaurants: [] })
     }
     
     const restaurants = await prisma.restaurant.findMany({
@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
         OR: [
           { name: { contains: query, mode: 'insensitive' } },
           { categories: { hasSome: [query] } },
+          { address: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } },
         ],
       },
       select: {
@@ -24,11 +26,18 @@ export async function GET(request: NextRequest) {
         address: true,
         categories: true,
         coverImage: true,
+        priceRange: true,
+        description: true,
+        _count: {
+          select: {
+            reviews: true,
+          },
+        },
       },
       take: 10,
     })
     
-    return NextResponse.json({ results: restaurants })
+    return NextResponse.json({ restaurants })
   } catch (error) {
     console.error('Search restaurants error:', error)
     return NextResponse.json(

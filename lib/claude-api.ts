@@ -66,24 +66,39 @@ export async function extractReviewTags(content: string, restaurantName?: string
     
     const response = await client.messages.create({
       model: 'claude-3-haiku-20240307', // Use Haiku for cost efficiency
-      max_tokens: 100,
+      max_tokens: 50,
       temperature: 0,
       messages: [{
         role: 'user',
-        content: `Extract key tags from this restaurant review. Include only: dish names, cuisine types, and notable attributes (e.g., "cozy", "romantic", "family-friendly"). Return as comma-separated list, max 8 tags:
+        content: `Extract specific food items, cuisine types, or dining experience descriptors from this review. Only return relevant tags found in the review. If no specific dishes, cuisines, or attributes are mentioned, return "NONE". Format: comma-separated, max 5 tags.
 
-Restaurant: ${restaurantName || 'Unknown'}
 Review: "${truncatedContent}"`
       }]
     })
 
     if (response.content[0].type === 'text') {
       const tagsText = response.content[0].text.trim()
+      
+      // If the AI returns "NONE" or similar, return empty array
+      if (tagsText.toUpperCase() === 'NONE' || tagsText.toLowerCase().includes('no specific') || tagsText.toLowerCase().includes('no dish')) {
+        return []
+      }
+      
       const tags = tagsText
         .split(',')
         .map(tag => tag.trim())
-        .filter(tag => tag.length > 0 && tag.length < 30) // Basic validation
-        .slice(0, 8) // Max 8 tags
+        .filter(tag => {
+          // Filter out non-relevant tags
+          const lowerTag = tag.toLowerCase()
+          return tag.length > 1 && 
+                 tag.length < 25 && 
+                 !lowerTag.includes('review') &&
+                 !lowerTag.includes('based on') &&
+                 !lowerTag.includes('there are') &&
+                 !lowerTag.includes('no ') &&
+                 !lowerTag.includes('provided')
+        })
+        .slice(0, 5) // Max 5 tags
       
       return tags
     }

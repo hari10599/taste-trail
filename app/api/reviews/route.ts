@@ -237,22 +237,7 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Check if user already reviewed this restaurant
-    const existingReview = await prisma.review.findFirst({
-      where: {
-        userId: payload.userId,
-        restaurantId: restaurantId,
-      },
-    })
-    
-    if (existingReview) {
-      return NextResponse.json(
-        { error: 'You have already reviewed this restaurant' },
-        { status: 400 }
-      )
-    }
-    
-    // Create the review
+    // Create the review (allowing multiple reviews per restaurant)
     const review = await prisma.review.create({
       data: {
         userId: payload.userId,

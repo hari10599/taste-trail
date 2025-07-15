@@ -256,7 +256,7 @@ export function ReviewCard({
         <p className="text-gray-700 mb-4 whitespace-pre-wrap">{review.content}</p>
         
         {/* AI Insights */}
-        {review.aiAnalyzed && (
+        {review.aiAnalyzed && (review.sentiment || (review.tags && review.tags.length > 0)) && (
           <div className="mb-4 space-y-2">
             {/* Sentiment Badge */}
             {review.sentiment && (
