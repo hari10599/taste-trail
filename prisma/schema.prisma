@@ -124,6 +124,11 @@ model Review {
   isPromoted    Boolean   @default(false)
   isHidden      Boolean   @default(false)
   
+  // AI-generated fields
+  sentiment     String?   // POSITIVE, NEUTRAL, NEGATIVE
+  tags          String[]  @default([]) // AI-extracted tags
+  aiAnalyzed    Boolean   @default(false)
+  
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   restaurantId  String

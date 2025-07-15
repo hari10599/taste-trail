@@ -3,6 +3,33 @@ import { prisma } from '@/lib/db/prisma'
 import { verifyAccessToken } from '@/lib/auth/jwt'
 import { createReviewSchema } from '@/lib/validations/review'
 import { createNotification } from '@/lib/notifications'
+import { analyzeReviewSentiment, extractReviewTags } from '@/lib/claude-api'
+
+// Async function to analyze review with AI
+async function analyzeReviewWithAI(reviewId: string, content: string, restaurantName: string) {
+  try {
+    // Run sentiment analysis and tag extraction in parallel
+    const [sentiment, tags] = await Promise.all([
+      analyzeReviewSentiment(content),
+      extractReviewTags(content, restaurantName)
+    ])
+    
+    // Update the review with AI insights if we got results
+    if (sentiment || tags.length > 0) {
+      await prisma.review.update({
+        where: { id: reviewId },
+        data: {
+          sentiment: sentiment || undefined,
+          tags: tags.length > 0 ? tags : undefined,
+          aiAnalyzed: true
+        }
+      })
+    }
+  } catch (error) {
+    console.error('Failed to update review with AI analysis:', error)
+    // Don't throw - this should not break the review creation
+  }
+}
 
 // GET /api/reviews - Get reviews with filters
 export async function GET(request: NextRequest) {
@@ -274,6 +301,11 @@ export async function POST(request: NextRequest) {
         reviewId: review.id
       })
     }
+    
+    // Perform AI analysis asynchronously (don't block the response)
+    analyzeReviewWithAI(review.id, validatedData.content, restaurant.name).catch(error => {
+      console.error('AI analysis failed for review:', review.id, error)
+    })
     
     return NextResponse.json({ review }, { status: 201 })
   } catch (error: any) {

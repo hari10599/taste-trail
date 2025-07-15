@@ -9,7 +9,8 @@ import { UserBadge } from '@/components/ui/user-badge'
 import { FollowButton } from '@/components/FollowButton'
 import { 
   Heart, MessageSquare, Share2, MoreVertical, 
-  Edit, Trash2, Flag, Calendar, DollarSign 
+  Edit, Trash2, Flag, Calendar, DollarSign,
+  Sparkles, TrendingUp, TrendingDown, Minus
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -25,6 +26,9 @@ interface ReviewCardProps {
     visitDate: string
     pricePerPerson?: number | null
     createdAt: string
+    sentiment?: string | null
+    tags?: string[]
+    aiAnalyzed?: boolean
     user: {
       id: string
       name: string
@@ -250,6 +254,55 @@ export function ReviewCard({
           <h3 className="font-semibold text-lg mb-2">{review.title}</h3>
         )}
         <p className="text-gray-700 mb-4 whitespace-pre-wrap">{review.content}</p>
+        
+        {/* AI Insights */}
+        {review.aiAnalyzed && (
+          <div className="mb-4 space-y-2">
+            {/* Sentiment Badge */}
+            {review.sentiment && (
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant="outline" 
+                  className={`flex items-center gap-1 ${
+                    review.sentiment === 'POSITIVE' 
+                      ? 'text-green-600 border-green-600' 
+                      : review.sentiment === 'NEGATIVE'
+                      ? 'text-red-600 border-red-600'
+                      : 'text-gray-600 border-gray-600'
+                  }`}
+                >
+                  {review.sentiment === 'POSITIVE' ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : review.sentiment === 'NEGATIVE' ? (
+                    <TrendingDown className="h-3 w-3" />
+                  ) : (
+                    <Minus className="h-3 w-3" />
+                  )}
+                  {review.sentiment.charAt(0) + review.sentiment.slice(1).toLowerCase()}
+                </Badge>
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  AI Analysis
+                </span>
+              </div>
+            )}
+            
+            {/* Tags */}
+            {review.tags && review.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {review.tags.map((tag, index) => (
+                  <Badge 
+                    key={index} 
+                    variant="secondary"
+                    className="text-xs"
+                  >
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Images */}
         {review.images.length > 0 && (
