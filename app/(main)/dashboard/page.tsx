@@ -15,7 +15,7 @@ import {
 import { 
   MapPin, Star, MessageSquare, Heart, TrendingUp, Users, Award,
   ArrowRight, ChefHat, Clock, DollarSign, ArrowUpRight, ArrowDownRight,
-  Search, Filter, Navigation
+  Search, Filter
 } from 'lucide-react'
 import axios from 'axios'
 import Link from 'next/link'
@@ -65,9 +65,6 @@ export default function DashboardPage() {
   const [trendingRestaurants, setTrendingRestaurants] = useState<TrendingRestaurant[]>([])
   const [recentReviews, setRecentReviews] = useState<RecentReview[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-
-  const categories = ['Italian', 'Chinese', 'Japanese', 'Mexican', 'Indian', 'Thai', 'American', 'French']
 
   useEffect(() => {
     fetchDashboardData()
@@ -211,36 +208,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Quick Category Filters */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          <Button
-            variant={selectedCategory === null ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedCategory(null)}
-            className="whitespace-nowrap"
-          >
-            All Categories
-          </Button>
-          {categories.map((category) => (
-            <Button
-              key={category}
-              variant={selectedCategory === category ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedCategory(category)}
-              className="whitespace-nowrap"
-            >
-              {category}
-            </Button>
-          ))}
-          <Link href="/map">
-            <Button variant="outline" size="sm" className="whitespace-nowrap">
-              <Navigation className="h-4 w-4 mr-1" />
-              Near Me
-            </Button>
-          </Link>
-        </div>
-      </div>
 
       {/* Trending Restaurants */}
       <Card className="mb-8">

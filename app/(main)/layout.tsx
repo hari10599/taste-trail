@@ -134,7 +134,13 @@ export default function MainLayout({
                           <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                             <div className="flex items-center space-x-2">
                               <User className="h-4 w-4" />
-                              <span>Profile</span>
+                              <span>Profile Settings</span>
+                            </div>
+                          </Link>
+                          <Link href={`/users/${user.id}`} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            <div className="flex items-center space-x-2">
+                              <Star className="h-4 w-4" />
+                              <span>View My Profile</span>
                             </div>
                           </Link>
                           {user?.role !== 'INFLUENCER' && (
@@ -224,7 +230,10 @@ export default function MainLayout({
                     Account
                   </div>
                   <Link href="/profile" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
-                    Profile ({user.name})
+                    Profile Settings
+                  </Link>
+                  <Link href={`/users/${user.id}`} className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">
+                    View My Profile
                   </Link>
                   {user?.role !== 'INFLUENCER' && (
                     <Link href="/influencer/apply" className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md">

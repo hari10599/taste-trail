@@ -29,7 +29,7 @@ export default function RestaurantsPage() {
   
   useEffect(() => {
     fetchRestaurants()
-  }, [page, debouncedSearch, filters.category, filters.priceRange, filters.minRating, filters.sortBy])
+  }, [page, debouncedSearch, filters.category, filters.priceRange, filters.minRating, filters.sortBy, filters.sortOrder])
   
   const fetchRestaurants = async () => {
     setIsLoading(true)
@@ -102,13 +102,16 @@ export default function RestaurantsPage() {
         <div className="flex flex-wrap gap-2">
           <span className="text-sm text-gray-600">Sort by:</span>
           {[
-            { value: 'createdAt', label: 'Newest' },
-            { value: 'rating', label: 'Rating' },
-            { value: 'reviews', label: 'Most Reviewed' },
+            { value: 'createdAt', label: 'Newest', order: 'desc' },
+            { value: 'rating', label: 'Top Rated', order: 'desc' },
+            { value: 'reviews', label: 'Most Reviewed', order: 'desc' },
           ].map((option) => (
             <button
               key={option.value}
-              onClick={() => handleFilterChange({ sortBy: option.value })}
+              onClick={() => handleFilterChange({ 
+                sortBy: option.value, 
+                sortOrder: option.order 
+              })}
               className={`px-3 py-1 rounded-full text-sm transition-colors ${
                 filters.sortBy === option.value
                   ? 'bg-primary text-white'

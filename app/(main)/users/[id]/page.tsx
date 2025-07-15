@@ -73,6 +73,9 @@ export default function UserProfilePage() {
   const [activeTab, setActiveTab] = useState('reviews')
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 })
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set())
+  const [reviewsPage, setReviewsPage] = useState(1)
+  const [hasMoreReviews, setHasMoreReviews] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -119,13 +122,27 @@ export default function UserProfilePage() {
     }
   }
 
-  const fetchUserReviews = async () => {
+  const fetchUserReviews = async (loadMore = false) => {
     try {
+      if (loadMore) {
+        setIsLoadingMore(true)
+      }
+      
       const token = localStorage.getItem('accessToken')
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const page = loadMore ? reviewsPage + 1 : 1
       
-      const response = await axios.get(`/api/reviews?userId=${userId}`, { headers })
-      setReviews(response.data.reviews)
+      const response = await axios.get(`/api/reviews?userId=${userId}&page=${page}&limit=10`, { headers })
+      
+      if (loadMore) {
+        setReviews(prev => [...prev, ...response.data.reviews])
+        setReviewsPage(page)
+      } else {
+        setReviews(response.data.reviews)
+        setReviewsPage(1)
+      }
+      
+      setHasMoreReviews(response.data.pagination.page < response.data.pagination.totalPages)
       
       // Extract liked review IDs
       if (response.data.likedReviewIds) {
@@ -133,6 +150,8 @@ export default function UserProfilePage() {
       }
     } catch (error) {
       console.error('Failed to fetch reviews:', error)
+    } finally {
+      setIsLoadingMore(false)
     }
   }
 
@@ -377,6 +396,25 @@ export default function UserProfilePage() {
                   onShare={() => handleShare(review)}
                 />
               ))}
+              
+              {hasMoreReviews && (
+                <div className="flex justify-center mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => fetchUserReviews(true)}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Load More Reviews'
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

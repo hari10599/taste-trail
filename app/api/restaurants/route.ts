@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: sortBy === 'createdAt' 
           ? { createdAt: sortOrder as 'asc' | 'desc' }
+          : sortBy === 'reviews'
+          ? { reviews: { _count: sortOrder as 'asc' | 'desc' } }
           : undefined,
       }),
       prisma.restaurant.count({ where }),
