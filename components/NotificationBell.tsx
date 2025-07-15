@@ -41,17 +41,32 @@ export function NotificationBell() {
   const [isConnected, setIsConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected')
   const [initialConnectionMade, setInitialConnectionMade] = useState(false)
+  const [lastFetchTime, setLastFetchTime] = useState(0)
   
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttempts = useRef(0)
   const maxReconnectAttempts = 5
+  const isPolling = useRef(false)
   
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
     if (token) {
+      // Only fetch notifications once on mount
       fetchNotifications()
+      // Set up SSE connection which will handle real-time updates
       setupSSEConnection()
+      
+      // Set up token refresh interval (every 10 minutes)
+      const tokenRefreshInterval = setInterval(() => {
+        refreshAccessToken()
+      }, 10 * 60 * 1000) // 10 minutes
+      
+      return () => {
+        cleanup()
+        clearInterval(tokenRefreshInterval)
+      }
     }
     
     return () => {
@@ -91,6 +106,31 @@ export function NotificationBell() {
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
     }
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+    isPolling.current = false
+  }
+  
+  const refreshAccessToken = async () => {
+    try {
+      const response = await axios.post('/api/auth/refresh', {}, {
+        withCredentials: true
+      })
+      
+      if (response.data.accessToken) {
+        localStorage.setItem('accessToken', response.data.accessToken)
+        // Reconnect SSE with new token
+        if (eventSourceRef.current) {
+          cleanup()
+          setupSSEConnection()
+        }
+      }
+    } catch (error) {
+      // Failed to refresh token
+      // Don't do anything - user might need to re-login
+    }
   }
   
   const setupSSEConnection = () => {
@@ -106,7 +146,15 @@ export function NotificationBell() {
         setConnectionStatus('connected')
         setIsConnected(true)
         reconnectAttempts.current = 0
-        console.log('SSE connection established')
+        // SSE connection established
+        
+        // Stop polling if it was active
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+          isPolling.current = false
+          // Stopped polling due to SSE connection
+        }
       }
       
       eventSource.onmessage = (event) => {
@@ -114,48 +162,76 @@ export function NotificationBell() {
           const data = JSON.parse(event.data)
           handleSSEMessage(data)
         } catch (error) {
-          console.error('Failed to parse SSE message:', error)
+          // Failed to parse SSE message
         }
       }
       
       eventSource.onerror = (error) => {
-        console.error('SSE connection error:', error)
+        // SSE connection error
+        eventSource.close() // Always close the connection on error
         setConnectionStatus('error')
         setIsConnected(false)
+        eventSourceRef.current = null
+        
+        // If we get an immediate error (readyState CLOSED), it's likely an auth error
+        // Don't retry and don't start polling
+        if (eventSource.readyState === EventSource.CLOSED && reconnectAttempts.current === 0) {
+          // SSE authentication error - not retrying
+          setConnectionStatus('disconnected')
+          return
+        }
         
         // Attempt to reconnect with exponential backoff
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttempts.current++
-            console.log(`Reconnecting... attempt ${reconnectAttempts.current}`)
-            eventSource.close()
+            // Reconnecting... attempt ${reconnectAttempts.current}
             setupSSEConnection()
           }, delay)
         } else {
           setConnectionStatus('disconnected')
-          console.log('Max reconnection attempts reached, falling back to polling')
+          // Max reconnection attempts reached, falling back to polling
           // Fall back to polling
           startPolling()
         }
       }
     } catch (error) {
-      console.error('Failed to setup SSE connection:', error)
+      // Failed to setup SSE connection
       setConnectionStatus('error')
       startPolling()
     }
   }
   
   const startPolling = () => {
-    // Fallback polling every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
+    // Prevent multiple polling instances
+    if (isPolling.current) {
+      // Polling already active, skipping...
+      return
+    }
+    
+    // Clear any existing interval just in case
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+    
+    // Starting fallback polling mode...
+    isPolling.current = true
+    
+    // Initial fetch
+    fetchNotifications()
+    
+    // Set up polling every 30 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      // Polling for notifications...
+      fetchNotifications()
+    }, 30000)
   }
   
   const handleSSEMessage = (data: any) => {
     switch (data.type) {
       case 'connected':
-        console.log('SSE connection confirmed')
+        // SSE connection confirmed
         setInitialConnectionMade(true)
         break
         
@@ -188,14 +264,23 @@ export function NotificationBell() {
         break
         
       default:
-        console.log('Unknown SSE message type:', data.type)
+        // Unknown SSE message type
     }
   }
   
   const fetchNotifications = async () => {
+    // Prevent rapid consecutive calls (minimum 1 second between calls)
+    const now = Date.now()
+    if (now - lastFetchTime < 1000) {
+      // Skipping fetch - too soon since last fetch
+      return
+    }
+    
     try {
       const token = localStorage.getItem('accessToken')
       if (!token) return
+      
+      setLastFetchTime(now)
       
       const response = await axios.get('/api/notifications?limit=10', {
         headers: {
@@ -206,10 +291,10 @@ export function NotificationBell() {
       setNotifications(response.data.notifications)
       setUnreadCount(response.data.unreadCount)
     } catch (error: any) {
-      console.error('Failed to fetch notifications:', error)
+      // Failed to fetch notifications
       // Don't show error for auth issues, just fail silently for notifications
       if (error.response?.status !== 401) {
-        console.error('Notification fetch error:', error)
+        // Notification fetch error
       }
     }
   }
@@ -237,7 +322,7 @@ export function NotificationBell() {
         setUnreadCount(0)
       }
     } catch (error) {
-      console.error('Failed to mark notifications as read:', error)
+      // Failed to mark notifications as read
       toast.error('Failed to mark notifications as read')
     }
   }
