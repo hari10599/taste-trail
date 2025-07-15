@@ -9,6 +9,8 @@ import { Avatar } from '@/components/ui/avatar'
 import { UserBadge } from '@/components/ui/user-badge'
 import { FollowButton } from '@/components/FollowButton'
 import { ReviewCard } from '@/components/ReviewCard'
+import { EditReviewDialog } from '@/components/EditReviewDialog'
+import { DeleteReviewDialog } from '@/components/DeleteReviewDialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   MapPin, Calendar, Star, Users, MessageSquare, 
@@ -76,6 +78,8 @@ export default function UserProfilePage() {
   const [reviewsPage, setReviewsPage] = useState(1)
   const [hasMoreReviews, setHasMoreReviews] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [editingReview, setEditingReview] = useState<any>(null)
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null)
 
   useEffect(() => {
     checkAuth()
@@ -236,6 +240,27 @@ export default function UserProfilePage() {
       toast.success('Link copied to clipboard!')
     }
   }
+  
+  const handleEdit = (review: Review) => {
+    setEditingReview(review)
+  }
+  
+  const handleDelete = (reviewId: string) => {
+    setDeletingReviewId(reviewId)
+  }
+  
+  const handleEditSuccess = (updatedReview: any) => {
+    setReviews(reviews.map(review => 
+      review.id === updatedReview.id ? updatedReview : review
+    ))
+    setEditingReview(null)
+  }
+  
+  const handleDeleteSuccess = () => {
+    setReviews(reviews.filter(review => review.id !== deletingReviewId))
+    setDeletingReviewId(null)
+    toast.success('Review deleted successfully')
+  }
 
   if (isLoading) {
     return (
@@ -394,6 +419,8 @@ export default function UserProfilePage() {
                   isLiked={likedReviews.has(review.id)}
                   onLike={() => handleLike(review.id)}
                   onShare={() => handleShare(review)}
+                  onEdit={() => handleEdit(review)}
+                  onDelete={() => handleDelete(review.id)}
                 />
               ))}
               
@@ -509,6 +536,26 @@ export default function UserProfilePage() {
           )}
         </TabsContent>
       </Tabs>
+      
+      {/* Edit Review Dialog */}
+      {editingReview && (
+        <EditReviewDialog
+          review={editingReview}
+          isOpen={!!editingReview}
+          onClose={() => setEditingReview(null)}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+      
+      {/* Delete Review Dialog */}
+      {deletingReviewId && (
+        <DeleteReviewDialog
+          reviewId={deletingReviewId}
+          isOpen={!!deletingReviewId}
+          onClose={() => setDeletingReviewId(null)}
+          onSuccess={handleDeleteSuccess}
+        />
+      )}
     </div>
   )
 }

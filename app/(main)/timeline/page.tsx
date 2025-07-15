@@ -5,9 +5,11 @@ import { ReviewCard } from '@/components/ReviewCard'
 import { CommentSection } from '@/components/CommentSection'
 import { TimelineStats } from '@/components/TimelineStats'
 import { ReportDialog } from '@/components/ReportDialog'
+import { EditReviewDialog } from '@/components/EditReviewDialog'
+import { DeleteReviewDialog } from '@/components/DeleteReviewDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Loader2, TrendingUp, Star, Shield, Users, RefreshCw, LogIn } from 'lucide-react'
+import { Loader2, TrendingUp, Star, Shield, Users, RefreshCw, LogIn, PenTool } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -29,6 +31,8 @@ export default function TimelinePage() {
     targetId: '',
     targetType: 'review'
   })
+  const [editingReview, setEditingReview] = useState<any>(null)
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   
@@ -271,6 +275,27 @@ export default function TimelinePage() {
     }
   }
   
+  const handleEdit = (review: any) => {
+    setEditingReview(review)
+  }
+  
+  const handleDelete = (reviewId: string) => {
+    setDeletingReviewId(reviewId)
+  }
+  
+  const handleEditSuccess = (updatedReview: any) => {
+    setReviews(reviews.map(review => 
+      review.id === updatedReview.id ? updatedReview : review
+    ))
+    setEditingReview(null)
+  }
+  
+  const handleDeleteSuccess = () => {
+    setReviews(reviews.filter(review => review.id !== deletingReviewId))
+    setDeletingReviewId(null)
+    toast.success('Review deleted successfully')
+  }
+  
   const filters = [
     { key: 'all', label: 'All', icon: RefreshCw },
     { key: 'trending', label: 'Trending', icon: TrendingUp },
@@ -291,20 +316,31 @@ export default function TimelinePage() {
               Discover what people are saying about restaurants
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setReviews([])
-              setPage(1)
-              setHasMore(true)
-              fetchReviews(true)
-            }}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Link href="/reviews/new">
+              <Button
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <PenTool className="h-4 w-4" />
+                Write Review
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setReviews([])
+                setPage(1)
+                setHasMore(true)
+                fetchReviews(true)
+              }}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
       
@@ -364,6 +400,8 @@ export default function TimelinePage() {
               onComment={() => handleComment(review.id)}
               onShare={() => handleShare(review)}
               onReport={() => handleReport(review.id, review.user.name)}
+              onEdit={() => handleEdit(review)}
+              onDelete={() => handleDelete(review.id)}
             />
             
             {expandedComments.has(review.id) && (
@@ -416,6 +454,26 @@ export default function TimelinePage() {
         targetType={reportDialog.targetType}
         targetName={reportDialog.targetName}
       />
+      
+      {/* Edit Review Dialog */}
+      {editingReview && (
+        <EditReviewDialog
+          review={editingReview}
+          isOpen={!!editingReview}
+          onClose={() => setEditingReview(null)}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+      
+      {/* Delete Review Dialog */}
+      {deletingReviewId && (
+        <DeleteReviewDialog
+          reviewId={deletingReviewId}
+          isOpen={!!deletingReviewId}
+          onClose={() => setDeletingReviewId(null)}
+          onSuccess={handleDeleteSuccess}
+        />
+      )}
     </div>
   )
 }

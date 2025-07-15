@@ -50,8 +50,6 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
   
   const handleImageChange = async (files: File[]) => {
     if (files.length === 0) {
-      setUploadedImageUrls([])
-      setValue('images', [])
       return
     }
 
@@ -60,8 +58,9 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
       const uploadPromises = files.map(file => uploadImage(file, 'reviews'))
       const urls = await Promise.all(uploadPromises)
       
-      setUploadedImageUrls(urls)
-      setValue('images', urls)
+      const newImages = [...uploadedImageUrls, ...urls]
+      setUploadedImageUrls(newImages)
+      setValue('images', newImages)
     } catch (error) {
       console.error('Failed to upload images:', error)
       toast.error('Failed to upload images')
@@ -112,7 +111,7 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
   const rating = watch('rating')
   const content = watch('content')
   const contentLength = content?.length || 0
-  const isFormValid = rating > 0 && contentLength >= 50 && !uploadingImages
+  const isFormValid = rating > 0 && contentLength >= 20 && !uploadingImages
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -159,12 +158,12 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
       
       {/* Review Content */}
       <div>
-        <label className="block text-sm font-medium mb-2">Review * (min 50 characters)</label>
+        <label className="block text-sm font-medium mb-2">Review * (min 20 characters)</label>
         <textarea
           {...register('content')}
           className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
           rows={6}
-          placeholder="Tell us about your experience... (minimum 50 characters)"
+          placeholder="Tell us about your experience... (minimum 20 characters)"
         />
         <div className="flex items-center justify-between mt-1">
           <div>
@@ -172,7 +171,7 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
               <p className="text-red-500 text-sm">{errors.content.message}</p>
             )}
           </div>
-          <p className="text-sm text-gray-500">{contentLength} / 50 min</p>
+          <p className="text-sm text-gray-500">{contentLength} / 20 min</p>
         </div>
       </div>
       
@@ -239,24 +238,18 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
           Photos
         </label>
         <ImageUpload
-          onChange={handleImageChange}
+          onUpload={handleImageChange}
           maxFiles={10}
           disabled={uploadingImages}
+          existingImages={uploadedImageUrls}
+          onRemove={(index) => {
+            const newImages = uploadedImageUrls.filter((_, i) => i !== index)
+            setUploadedImageUrls(newImages)
+            setValue('images', newImages)
+          }}
         />
         {uploadingImages && (
           <p className="text-sm text-gray-600 mt-2">Uploading images...</p>
-        )}
-        {uploadedImageUrls.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {uploadedImageUrls.map((url, index) => (
-              <img
-                key={index}
-                src={url}
-                alt={`Upload ${index + 1}`}
-                className="h-20 w-20 object-cover rounded"
-              />
-            ))}
-          </div>
         )}
       </div>
       
@@ -296,7 +289,7 @@ export function ReviewForm({ selectedRestaurant, onCancel }: ReviewFormProps) {
             {rating > 0 ? '✓' : '○'} Add a rating (1-5 stars)
           </li>
           <li className="flex items-center gap-2">
-            {contentLength >= 50 ? '✓' : '○'} Write your review (min 50 characters)
+            {contentLength >= 20 ? '✓' : '○'} Write your review (min 20 characters)
           </li>
         </ul>
       </div>

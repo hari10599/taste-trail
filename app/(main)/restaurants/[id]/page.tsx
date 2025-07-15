@@ -18,6 +18,8 @@ import Link from 'next/link'
 import { ReviewCard } from '@/components/ReviewCard'
 import { CommentSection } from '@/components/CommentSection'
 import { ReportDialog } from '@/components/ReportDialog'
+import { EditReviewDialog } from '@/components/EditReviewDialog'
+import { DeleteReviewDialog } from '@/components/DeleteReviewDialog'
 
 const amenityIcons: { [key: string]: any } = {
   'WiFi': Wifi,
@@ -42,6 +44,8 @@ export default function RestaurantDetailPage() {
     targetId: '',
     targetType: 'review'
   })
+  const [editingReview, setEditingReview] = useState<any>(null)
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null)
   
   useEffect(() => {
     checkAuth()
@@ -260,6 +264,27 @@ export default function RestaurantDetailPage() {
     }
   }
   
+  const handleEdit = (review: any) => {
+    setEditingReview(review)
+  }
+  
+  const handleDelete = (reviewId: string) => {
+    setDeletingReviewId(reviewId)
+  }
+  
+  const handleEditSuccess = (updatedReview: any) => {
+    setRecentReviews(recentReviews.map(review => 
+      review.id === updatedReview.id ? updatedReview : review
+    ))
+    setEditingReview(null)
+  }
+  
+  const handleDeleteSuccess = () => {
+    setRecentReviews(recentReviews.filter(review => review.id !== deletingReviewId))
+    setDeletingReviewId(null)
+    toast.success('Review deleted successfully')
+  }
+  
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -430,6 +455,8 @@ export default function RestaurantDetailPage() {
                       onComment={() => handleComment(review.id)}
                       onShare={() => handleShare(review)}
                       onReport={() => handleReport(review.id, review.user.name)}
+                      onEdit={() => handleEdit(review)}
+                      onDelete={() => handleDelete(review.id)}
                       showRestaurant={false}
                     />
                     
@@ -554,6 +581,26 @@ export default function RestaurantDetailPage() {
         targetType={reportDialog.targetType}
         targetName={reportDialog.targetName}
       />
+      
+      {/* Edit Review Dialog */}
+      {editingReview && (
+        <EditReviewDialog
+          review={editingReview}
+          isOpen={!!editingReview}
+          onClose={() => setEditingReview(null)}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+      
+      {/* Delete Review Dialog */}
+      {deletingReviewId && (
+        <DeleteReviewDialog
+          reviewId={deletingReviewId}
+          isOpen={!!deletingReviewId}
+          onClose={() => setDeletingReviewId(null)}
+          onSuccess={handleDeleteSuccess}
+        />
+      )}
     </div>
   )
 }

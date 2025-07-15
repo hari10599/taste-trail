@@ -62,6 +62,11 @@ const templates: Record<string, NotificationTemplate> = {
     title: () => 'Influencer application update',
     message: (data) => `Your influencer application has been reviewed. ${data.notes || 'Please try again later.'}`
   },
+  influencer_application_received: {
+    type: 'influencer_application_received',
+    title: () => 'New influencer application',
+    message: (data) => `${data.applicantName} has submitted an influencer application with ${data.followerCount?.toLocaleString()} followers. Review needed.`
+  },
   moderation_warning: {
     type: 'moderation_warning',
     title: () => 'Content moderation warning',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { verifyAccessToken } from '@/lib/auth/jwt'
+import { createNotification } from '@/lib/notifications'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,6 +39,12 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // Get user info
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { name: true, email: true }
+    })
+    
     // Create influencer application
     const application = await prisma.influencerApplication.create({
       data: {
@@ -52,6 +59,21 @@ export async function POST(request: NextRequest) {
         submittedAt: new Date()
       }
     })
+    
+    // Send notification to all admins
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true }
+    })
+    
+    for (const admin of admins) {
+      await createNotification('influencer_application_received', admin.id, {
+        applicantName: user?.name || 'Unknown',
+        applicantEmail: user?.email || 'Unknown',
+        applicationId: application.id,
+        followerCount: application.followerCount
+      })
+    }
     
     return NextResponse.json({
       message: 'Application submitted successfully',
