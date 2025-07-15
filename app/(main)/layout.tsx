@@ -151,6 +151,14 @@ export default function MainLayout({
                               </div>
                             </Link>
                           )}
+                          {user?.role === 'INFLUENCER' && (
+                            <Link href="/influencer" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              <div className="flex items-center space-x-2">
+                                <Star className="h-4 w-4" />
+                                <span>Influencer Dashboard</span>
+                              </div>
+                            </Link>
+                          )}
                           {user?.role === 'OWNER' && (
                             <Link href="/owner" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                               <div className="flex items-center space-x-2">
