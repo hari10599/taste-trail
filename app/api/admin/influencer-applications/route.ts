@@ -16,7 +16,24 @@ export async function GET(request: NextRequest) {
     }
     
     const token = authHeader.split(' ')[1]
-    const payload = verifyAccessToken(token)
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Invalid authorization token format' },
+        { status: 401 }
+      )
+    }
+    
+    let payload
+    try {
+      payload = verifyAccessToken(token)
+    } catch (error) {
+      console.error('JWT verification failed in admin endpoint:', error)
+      return NextResponse.json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      )
+    }
     
     // Check if user is admin
     const user = await prisma.user.findUnique({
@@ -90,7 +107,24 @@ export async function PUT(request: NextRequest) {
     }
     
     const token = authHeader.split(' ')[1]
-    const payload = verifyAccessToken(token)
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Invalid authorization token format' },
+        { status: 401 }
+      )
+    }
+    
+    let payload
+    try {
+      payload = verifyAccessToken(token)
+    } catch (error) {
+      console.error('JWT verification failed in admin endpoint:', error)
+      return NextResponse.json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      )
+    }
     
     // Check if user is admin
     const user = await prisma.user.findUnique({

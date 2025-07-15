@@ -41,7 +41,7 @@ async function checkUserBanStatus(userId: string): Promise<boolean> {
 }
 
 // Routes that require authentication
-const protectedRoutes = ['/dashboard', '/profile', '/restaurants/new', '/reviews/new']
+const protectedRoutes = ['/dashboard', '/profile', '/restaurants/new', '/reviews/new', '/influencer/apply']
 const adminRoutes = ['/admin']
 const ownerRoutes = ['/owner']
 const influencerRoutes = ['/influencer']
@@ -60,7 +60,7 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route))
   const isOwnerRoute = ownerRoutes.some(route => pathname.startsWith(route))
-  const isInfluencerRoute = influencerRoutes.some(route => pathname.startsWith(route))
+  const isInfluencerRoute = influencerRoutes.some(route => pathname.startsWith(route)) && !pathname.startsWith('/influencer/apply')
   
   if (isProtectedRoute || isAdminRoute || isOwnerRoute || isInfluencerRoute) {
     const authHeader = request.headers.get('authorization')

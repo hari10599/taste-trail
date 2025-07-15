@@ -19,7 +19,23 @@ export function generateRefreshToken(payload: JWTPayload): string {
 }
 
 export function verifyAccessToken(token: string): JWTPayload {
-  return jwt.verify(token, JWT_SECRET) as JWTPayload
+  if (!token) {
+    throw new Error('No token provided')
+  }
+  
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not defined')
+  }
+  
+  try {
+    return jwt.verify(token, JWT_SECRET) as JWTPayload
+  } catch (error) {
+    console.error('JWT verification failed:', {
+      token: token?.substring(0, 50) + '...',
+      error: error instanceof Error ? error.message : error
+    })
+    throw error
+  }
 }
 
 export function verifyRefreshToken(token: string): JWTPayload {
