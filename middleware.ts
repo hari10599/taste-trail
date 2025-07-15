@@ -44,6 +44,7 @@ async function checkUserBanStatus(userId: string): Promise<boolean> {
 const protectedRoutes = ['/dashboard', '/profile', '/restaurants/new', '/reviews/new']
 const adminRoutes = ['/admin']
 const ownerRoutes = ['/owner']
+const influencerRoutes = ['/influencer']
 // Routes that are always public
 const publicRoutes = ['/', '/restaurants', '/timeline']
 
@@ -59,8 +60,9 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route))
   const isOwnerRoute = ownerRoutes.some(route => pathname.startsWith(route))
+  const isInfluencerRoute = influencerRoutes.some(route => pathname.startsWith(route))
   
-  if (isProtectedRoute || isAdminRoute || isOwnerRoute) {
+  if (isProtectedRoute || isAdminRoute || isOwnerRoute || isInfluencerRoute) {
     const authHeader = request.headers.get('authorization')
     const token = request.cookies.get('accessToken')?.value || 
                   (authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null)
@@ -95,6 +97,10 @@ export async function middleware(request: NextRequest) {
     }
     
     if (isOwnerRoute && !['OWNER', 'ADMIN'].includes(payload.role)) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+    
+    if (isInfluencerRoute && !['INFLUENCER', 'ADMIN'].includes(payload.role)) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     

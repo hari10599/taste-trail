@@ -313,7 +313,7 @@ export function NotificationBell() {
         }
         
         // Show toast for important notifications (only after initial connection)
-        if (initialConnectionMade && ['like', 'comment', 'reply', 'new_review', 'influencer_application_received'].includes(data.payload.type)) {
+        if (initialConnectionMade && ['like', 'comment', 'reply', 'new_review', 'influencer_application_received', 'restaurant_claim_received'].includes(data.payload.type)) {
           toast.success(data.payload.title, {
             duration: 4000,
             icon: getNotificationIcon(data.payload.type)
@@ -424,7 +424,16 @@ export function NotificationBell() {
     if (notification.review) {
       return `/restaurants/${notification.review.restaurant.id}#review-${notification.review.id}`
     }
-    return '#'
+    
+    // Handle admin notifications
+    switch (notification.type) {
+      case 'restaurant_claim_received':
+        return '/admin/restaurant-claims'
+      case 'influencer_application_received':
+        return '/admin/influencer-applications'
+      default:
+        return '#'
+    }
   }
   
   const getNotificationIcon = (type: string) => {
@@ -443,6 +452,12 @@ export function NotificationBell() {
       case 'influencer_approved':
         return '✅'
       case 'influencer_rejected':
+        return '❌'
+      case 'restaurant_claim_received':
+        return '🏪'
+      case 'restaurant_claim_approved':
+        return '✅'
+      case 'restaurant_claim_rejected':
         return '❌'
       default:
         return '🔔'
@@ -529,13 +544,17 @@ export function NotificationBell() {
                 </div>
               ) : (
                 <div className="divide-y">
-                  {notifications.map((notification) => (
+                  {notifications.map((notification) => {
+                    const isAdminNotification = ['restaurant_claim_received', 'influencer_application_received'].includes(notification.type)
+                    return (
                     <Link
                       key={notification.id}
                       href={getNotificationLink(notification)}
                       onClick={() => handleNotificationClick(notification)}
                       className={`block p-4 hover:bg-gray-50 transition ${
-                        !notification.read ? 'bg-blue-50' : ''
+                        !notification.read 
+                          ? (isAdminNotification ? 'bg-orange-50 border-l-4 border-orange-400' : 'bg-blue-50') 
+                          : ''
                       }`}
                     >
                       <div className="flex gap-3">
@@ -573,7 +592,8 @@ export function NotificationBell() {
                         </div>
                       </div>
                     </Link>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
