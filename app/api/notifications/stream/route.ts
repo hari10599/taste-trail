@@ -10,11 +10,20 @@ export async function GET(request: NextRequest) {
     const token = url.searchParams.get('token')
     
     if (!token) {
+      console.log('SSE connection attempt without token')
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const payload = verifyAccessToken(token)
+    let payload
+    try {
+      payload = verifyAccessToken(token)
+    } catch (error) {
+      console.log('SSE connection attempt with invalid token:', error)
+      return new Response('Unauthorized', { status: 401 })
+    }
+    
     const userId = payload.userId
+    console.log(`Setting up SSE connection for user ${userId}`)
 
     // Create SSE response
     const encoder = new TextEncoder()
@@ -29,7 +38,7 @@ export async function GET(request: NextRequest) {
         controller.enqueue(data)
 
         // Store connection with controller
-        const response = { controller } as any
+        const response = { controller }
         addSSEConnection(userId, response)
 
         // Send unread notifications immediately upon connection
@@ -97,11 +106,17 @@ export async function GET(request: NextRequest) {
 
         // Handle connection cleanup
         const cleanup = () => {
+          console.log(`🧹 Cleaning up SSE connection for user ${userId}`)
           removeSSEConnection(userId)
           try {
             controller.close()
           } catch (error) {
-            // Controller might already be closed
+            console.log(`Error closing controller for user ${userId}:`, error)
+          }
+          // Clear health check interval
+          if (response.healthCheck) {
+            clearInterval(response.healthCheck)
+            response.healthCheck = null
           }
         }
 
@@ -110,6 +125,23 @@ export async function GET(request: NextRequest) {
         
         // Store cleanup function for manual cleanup
         response.cleanup = cleanup
+        
+        // Add periodic connection health check
+        const healthCheck = setInterval(() => {
+          try {
+            // Send a ping to keep connection alive
+            const ping = encoder.encode(': ping\n\n')
+            controller.enqueue(ping)
+            console.log(`✅ Health check ping sent to user ${userId}`)
+          } catch (error) {
+            console.log(`❌ Health check failed for user ${userId}, cleaning up:`, error)
+            clearInterval(healthCheck)
+            cleanup()
+          }
+        }, 30000) // Every 30 seconds
+        
+        // Store health check interval for cleanup
+        response.healthCheck = healthCheck
       },
       
       cancel() {

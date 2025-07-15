@@ -42,6 +42,7 @@ export function NotificationBell() {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected')
   const [initialConnectionMade, setInitialConnectionMade] = useState(false)
   const [lastFetchTime, setLastFetchTime] = useState(0)
+  const [connectionAttempts, setConnectionAttempts] = useState(0)
   
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -63,9 +64,26 @@ export function NotificationBell() {
         refreshAccessToken()
       }, 10 * 60 * 1000) // 10 minutes
       
+      // Handle page visibility changes
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('Page became visible, checking SSE connection')
+          // If no connection, try to reconnect
+          if (!eventSourceRef.current || eventSourceRef.current.readyState === EventSource.CLOSED) {
+            console.log('Reconnecting SSE due to page visibility')
+            setupSSEConnection()
+          }
+        } else {
+          console.log('Page became hidden')
+        }
+      }
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      
       return () => {
         cleanup()
         clearInterval(tokenRefreshInterval)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
       }
     }
     
@@ -98,7 +116,9 @@ export function NotificationBell() {
   }, [])
   
   const cleanup = () => {
+    console.log('🧹 Cleaning up NotificationBell connections')
     if (eventSourceRef.current) {
+      console.log('Closing SSE connection')
       eventSourceRef.current.close()
       eventSourceRef.current = null
     }
@@ -115,84 +135,120 @@ export function NotificationBell() {
   
   const refreshAccessToken = async () => {
     try {
+      console.log('Refreshing access token...')
       const response = await axios.post('/api/auth/refresh', {}, {
         withCredentials: true
       })
       
       if (response.data.accessToken) {
         localStorage.setItem('accessToken', response.data.accessToken)
+        console.log('Access token refreshed successfully')
+        
         // Reconnect SSE with new token
         if (eventSourceRef.current) {
           cleanup()
-          setupSSEConnection()
         }
+        setupSSEConnection()
+        
+        return Promise.resolve()
       }
     } catch (error) {
-      // Failed to refresh token
-      // Don't do anything - user might need to re-login
+      console.error('Failed to refresh token:', error)
+      return Promise.reject(error)
     }
   }
   
   const setupSSEConnection = () => {
     const token = localStorage.getItem('accessToken')
-    if (!token) return
+    if (!token) {
+      console.warn('No access token found, cannot establish SSE connection')
+      return
+    }
+    
+    // Cleanup existing connection first
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
     
     try {
       setConnectionStatus('connecting')
+      setConnectionAttempts(prev => prev + 1)
+      console.log(`Setting up SSE connection (attempt ${connectionAttempts + 1})`)
+      
       const eventSource = new EventSource(`/api/notifications/stream?token=${token}`)
       eventSourceRef.current = eventSource
       
       eventSource.onopen = () => {
+        console.log('SSE connection established successfully')
         setConnectionStatus('connected')
         setIsConnected(true)
         reconnectAttempts.current = 0
-        // SSE connection established
+        setConnectionAttempts(0)
         
         // Stop polling if it was active
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current)
           pollingIntervalRef.current = null
           isPolling.current = false
-          // Stopped polling due to SSE connection
+          console.log('Stopped polling due to SSE connection')
         }
+        
+        // Log connection success for debugging
+        console.log('✅ SSE connection ready for real-time notifications')
       }
       
       eventSource.onmessage = (event) => {
         try {
+          // Handle ping messages (server health checks)
+          if (event.data.trim() === '') {
+            // This is a ping message, just ignore it
+            return
+          }
+          
           const data = JSON.parse(event.data)
+          console.log('Raw SSE message received:', event.data)
           handleSSEMessage(data)
         } catch (error) {
-          // Failed to parse SSE message
+          console.error('Failed to parse SSE message:', error, 'Raw data:', event.data)
         }
       }
       
       eventSource.onerror = (error) => {
-        // SSE connection error
+        console.error('SSE connection error:', error, 'ReadyState:', eventSource.readyState)
         eventSource.close() // Always close the connection on error
         setConnectionStatus('error')
         setIsConnected(false)
         eventSourceRef.current = null
         
         // If we get an immediate error (readyState CLOSED), it's likely an auth error
-        // Don't retry and don't start polling
         if (eventSource.readyState === EventSource.CLOSED && reconnectAttempts.current === 0) {
-          // SSE authentication error - not retrying
-          setConnectionStatus('disconnected')
+          console.log('SSE authentication error detected - attempting token refresh')
+          // Try to refresh token first
+          refreshAccessToken().then(() => {
+            console.log('Token refreshed successfully, reconnecting SSE')
+            // After token refresh, try to reconnect
+            setTimeout(() => setupSSEConnection(), 1000)
+          }).catch((refreshError) => {
+            console.error('Token refresh failed:', refreshError)
+            console.log('Falling back to polling mode')
+            setConnectionStatus('disconnected')
+            startPolling()
+          })
           return
         }
         
         // Attempt to reconnect with exponential backoff
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)
+          console.log(`Reconnecting SSE in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`)
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttempts.current++
-            // Reconnecting... attempt ${reconnectAttempts.current}
             setupSSEConnection()
           }, delay)
         } else {
+          console.log('Max reconnection attempts reached, falling back to polling')
           setConnectionStatus('disconnected')
-          // Max reconnection attempts reached, falling back to polling
-          // Fall back to polling
           startPolling()
         }
       }
@@ -206,7 +262,7 @@ export function NotificationBell() {
   const startPolling = () => {
     // Prevent multiple polling instances
     if (isPolling.current) {
-      // Polling already active, skipping...
+      console.log('Polling already active, skipping...')
       return
     }
     
@@ -215,7 +271,7 @@ export function NotificationBell() {
       clearInterval(pollingIntervalRef.current)
     }
     
-    // Starting fallback polling mode...
+    console.log('Starting fallback polling mode...')
     isPolling.current = true
     
     // Initial fetch
@@ -223,48 +279,55 @@ export function NotificationBell() {
     
     // Set up polling every 30 seconds
     pollingIntervalRef.current = setInterval(() => {
-      // Polling for notifications...
+      console.log('Polling for notifications...')
       fetchNotifications()
     }, 30000)
   }
   
   const handleSSEMessage = (data: any) => {
+    console.log('Received SSE message:', data.type, data)
+    
     switch (data.type) {
       case 'connected':
-        // SSE connection confirmed
+        console.log('SSE connection confirmed')
         setInitialConnectionMade(true)
         break
         
       case 'notification':
+        console.log('New notification received:', data.payload)
         // Add new notification to the list
         setNotifications(prev => {
           // Avoid duplicates by checking if notification already exists
           const exists = prev.some(n => n.id === data.payload.id)
-          if (exists) return prev
+          if (exists) {
+            console.log('Duplicate notification ignored:', data.payload.id)
+            return prev
+          }
           return [data.payload, ...prev.slice(0, 9)] // Keep only 10 most recent
         })
         
-        // Only increment unread count and show toast for truly new notifications
-        // (not for initial batch sent on connection)
-        if (initialConnectionMade) {
+        // Increment unread count for unread notifications
+        if (!data.payload.read) {
+          console.log('Incrementing unread count for new notification')
           setUnreadCount(prev => prev + 1)
-          
-          // Show toast for important notifications
-          if (['like', 'comment', 'reply', 'new_review'].includes(data.payload.type)) {
-            toast.success(data.payload.title, {
-              duration: 4000,
-              icon: getNotificationIcon(data.payload.type)
-            })
-          }
+        }
+        
+        // Show toast for important notifications (only after initial connection)
+        if (initialConnectionMade && ['like', 'comment', 'reply', 'new_review', 'influencer_application_received'].includes(data.payload.type)) {
+          toast.success(data.payload.title, {
+            duration: 4000,
+            icon: getNotificationIcon(data.payload.type)
+          })
         }
         break
         
       case 'unread_count_update':
+        console.log('Updating unread count:', data.unreadCount)
         setUnreadCount(data.unreadCount)
         break
         
       default:
-        // Unknown SSE message type
+        console.log('Unknown SSE message type:', data.type)
     }
   }
   
@@ -272,15 +335,19 @@ export function NotificationBell() {
     // Prevent rapid consecutive calls (minimum 1 second between calls)
     const now = Date.now()
     if (now - lastFetchTime < 1000) {
-      // Skipping fetch - too soon since last fetch
+      console.log('Skipping fetch - too soon since last fetch')
       return
     }
     
     try {
       const token = localStorage.getItem('accessToken')
-      if (!token) return
+      if (!token) {
+        console.log('No token available for fetch')
+        return
+      }
       
       setLastFetchTime(now)
+      console.log('Fetching notifications...')
       
       const response = await axios.get('/api/notifications?limit=10', {
         headers: {
@@ -288,13 +355,18 @@ export function NotificationBell() {
         },
       })
       
+      console.log('Notifications fetched:', response.data.notifications.length, 'unread:', response.data.unreadCount)
       setNotifications(response.data.notifications)
       setUnreadCount(response.data.unreadCount)
     } catch (error: any) {
-      // Failed to fetch notifications
+      console.error('Failed to fetch notifications:', error)
       // Don't show error for auth issues, just fail silently for notifications
-      if (error.response?.status !== 401) {
-        // Notification fetch error
+      if (error.response?.status === 401) {
+        console.log('Auth error during fetch, attempting token refresh')
+        // Try to refresh token and retry
+        refreshAccessToken().catch(() => {
+          console.log('Token refresh failed during fetch')
+        })
       }
     }
   }
@@ -366,6 +438,12 @@ export function NotificationBell() {
         return '👥'
       case 'welcome':
         return '👋'
+      case 'influencer_application_received':
+        return '📝'
+      case 'influencer_approved':
+        return '✅'
+      case 'influencer_rejected':
+        return '❌'
       default:
         return '🔔'
     }
@@ -391,7 +469,7 @@ export function NotificationBell() {
           connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
           connectionStatus === 'error' ? 'bg-red-500 animate-pulse' :
           'bg-gray-400'
-        }`} />
+        }`} title={`Connection status: ${connectionStatus}${connectionAttempts > 0 ? ` (${connectionAttempts} attempts)` : ''}`} />
       </Button>
       
       {isOpen && (
@@ -427,7 +505,7 @@ export function NotificationBell() {
                 {connectionStatus === 'connecting' && (
                   <span className="text-yellow-600 flex items-center gap-1">
                     <span className="h-1.5 w-1.5 bg-yellow-500 rounded-full animate-pulse"></span>
-                    Connecting to live updates...
+                    Connecting to live updates... (attempt {connectionAttempts})
                   </span>
                 )}
                 {connectionStatus === 'disconnected' && (
@@ -439,7 +517,7 @@ export function NotificationBell() {
                 {connectionStatus === 'error' && (
                   <span className="text-red-600 flex items-center gap-1">
                     <span className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse"></span>
-                    Retrying connection...
+                    Retrying connection... (attempt {connectionAttempts})
                   </span>
                 )}
               </div>

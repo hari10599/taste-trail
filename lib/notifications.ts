@@ -17,8 +17,16 @@ export interface NotificationTemplate {
   message: (data: any) => string
 }
 
-// Active SSE connections
-const connections = new Map<string, Response & { controller: ReadableStreamDefaultController }>()
+// Active SSE connections - using global to ensure persistence across module reloads
+const globalForConnections = global as unknown as {
+  sseConnections: Map<string, { controller: ReadableStreamDefaultController, cleanup?: () => void }>
+}
+
+if (!globalForConnections.sseConnections) {
+  globalForConnections.sseConnections = new Map()
+}
+
+const connections = globalForConnections.sseConnections
 
 // Notification templates
 const templates: Record<string, NotificationTemplate> = {
@@ -198,6 +206,9 @@ export async function createNotification(
  * Send real-time notification via SSE
  */
 export async function sendRealTimeNotification(userId: string, notification: any): Promise<void> {
+  console.log(`Attempting to send real-time notification to user ${userId}. Total connections: ${connections.size}`)
+  console.log(`Connection Map identity:`, connections === globalForConnections.sseConnections)
+  
   const connection = connections.get(userId)
   if (connection?.controller) {
     try {
@@ -207,12 +218,17 @@ export async function sendRealTimeNotification(userId: string, notification: any
         payload: notification
       })}\n\n`
       
+      console.log(`✅ Sending real-time notification to user ${userId}:`, notification.type)
       connection.controller.enqueue(encoder.encode(data))
+      console.log(`✅ Notification sent successfully to user ${userId}`)
     } catch (error) {
-      console.error('Failed to send real-time notification:', error)
+      console.error('❌ Failed to send real-time notification:', error)
       // Remove broken connection
       connections.delete(userId)
     }
+  } else {
+    console.log(`❌ No active SSE connection for user ${userId}. Available connections:`, Array.from(connections.keys()))
+    console.log(`Global connections size:`, globalForConnections.sseConnections.size)
   }
 }
 
@@ -291,10 +307,21 @@ export async function markNotificationsAsRead(
       where: { userId, read: false }
     })
 
-    await sendRealTimeNotification(userId, {
-      type: 'unread_count_update',
-      unreadCount
-    })
+    const connection = connections.get(userId)
+    if (connection?.controller) {
+      try {
+        const encoder = new TextEncoder()
+        const data = `data: ${JSON.stringify({
+          type: 'unread_count_update',
+          unreadCount
+        })}\n\n`
+        
+        connection.controller.enqueue(encoder.encode(data))
+      } catch (error) {
+        console.error('Failed to send unread count update:', error)
+        connections.delete(userId)
+      }
+    }
   } catch (error) {
     console.error('Failed to mark notifications as read:', error)
   }
@@ -387,13 +414,28 @@ export async function sendWelcomeNotification(userId: string, userName: string, 
  * SSE Connection Management
  */
 export function addSSEConnection(userId: string, response: any): void {
+  // Remove any existing connection for this user first
+  if (connections.has(userId)) {
+    console.log(`Replacing existing SSE connection for user ${userId}`)
+    const existingConnection = connections.get(userId)
+    if (existingConnection?.cleanup) {
+      try {
+        existingConnection.cleanup()
+      } catch (error) {
+        console.log(`Error cleaning up existing connection for user ${userId}:`, error)
+      }
+    }
+    connections.delete(userId)
+  }
+  
   connections.set(userId, response)
-  console.log(`SSE connection added for user ${userId}. Active connections: ${connections.size}`)
+  console.log(`✅ SSE connection added for user ${userId}. Active connections: ${connections.size}`)
 }
 
 export function removeSSEConnection(userId: string): void {
+  const hadConnection = connections.has(userId)
   connections.delete(userId)
-  console.log(`SSE connection removed for user ${userId}. Active connections: ${connections.size}`)
+  console.log(`SSE connection removed for user ${userId}. Had connection: ${hadConnection}. Active connections: ${connections.size}`)
 }
 
 export function getActiveConnections(): number {
@@ -401,11 +443,13 @@ export function getActiveConnections(): number {
 }
 
 /**
- * Send heartbeat to all connections
+ * Send heartbeat to all connections (if needed for debugging)
  */
 export function sendHeartbeat(): void {
   const encoder = new TextEncoder()
   const heartbeat = encoder.encode(': heartbeat\n\n')
+  
+  console.log(`Manual heartbeat to ${connections.size} connections`)
   
   connections.forEach((connection, userId) => {
     try {
@@ -417,5 +461,5 @@ export function sendHeartbeat(): void {
   })
 }
 
-// Send heartbeat every 30 seconds
-setInterval(sendHeartbeat, 30000)
+// NOTE: Removed global heartbeat interval that was conflicting with per-connection health checks
+// Each SSE connection now manages its own health checks every 30 seconds

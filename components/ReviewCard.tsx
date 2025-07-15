@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
+import axios from 'axios'
 
 interface ReviewCardProps {
   review: {
@@ -54,7 +55,7 @@ interface ReviewCardProps {
 export function ReviewCard({
   review,
   currentUserId,
-  isLiked = false,
+  isLiked: initialIsLiked = false,
   onLike,
   onComment,
   onShare,
@@ -65,9 +66,67 @@ export function ReviewCard({
 }: ReviewCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [imageIndex, setImageIndex] = useState(0)
+  const [isLiked, setIsLiked] = useState(initialIsLiked)
+  const [likeCount, setLikeCount] = useState(review._count.likes)
+  const [isLiking, setIsLiking] = useState(false)
   
   const isOwner = currentUserId === review.user.id
   const timeAgo = formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })
+  
+  // Fetch like status from database on mount
+  useEffect(() => {
+    const fetchLikeStatus = async () => {
+      try {
+        const token = localStorage.getItem('accessToken')
+        if (!token || !currentUserId) return
+        
+        const response = await axios.get(`/api/reviews/${review.id}/likes`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        setIsLiked(response.data.isLiked)
+      } catch (error) {
+        console.error('Failed to fetch like status:', error)
+      }
+    }
+    
+    fetchLikeStatus()
+  }, [review.id, currentUserId])
+  
+  const handleLikeClick = async () => {
+    if (!currentUserId) {
+      toast('Please sign in to like reviews')
+      return
+    }
+    
+    if (isLiking) return // Prevent multiple clicks
+    
+    setIsLiking(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      
+      if (isLiked) {
+        // Unlike
+        await axios.delete(`/api/reviews/${review.id}/like`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        setIsLiked(false)
+        setLikeCount(prev => Math.max(0, prev - 1))
+      } else {
+        // Like
+        await axios.post(`/api/reviews/${review.id}/like`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        setIsLiked(true)
+        setLikeCount(prev => prev + 1)
+      }
+    } catch (error) {
+      console.error('Failed to update like:', error)
+      toast.error('Failed to update like')
+    } finally {
+      setIsLiking(false)
+    }
+  }
   
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -235,11 +294,20 @@ export function ReviewCard({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onLike}
-            className={`flex items-center gap-2 ${isLiked ? 'text-red-600 hover:text-red-700' : 'text-gray-500 hover:text-red-600'}`}
+            onClick={handleLikeClick}
+            disabled={isLiking}
+            className={`flex items-center gap-2 transition-colors ${
+              isLiked 
+                ? 'text-red-500 hover:text-red-600' 
+                : 'text-gray-500 hover:text-red-500'
+            }`}
           >
-            <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-600 text-red-600' : ''}`} />
-            {review._count.likes}
+            <Heart 
+              className={`h-4 w-4 transition-all ${
+                isLiked ? 'fill-red-500 text-red-500' : ''
+              }`} 
+            />
+            {likeCount}
           </Button>
           
           <Button
