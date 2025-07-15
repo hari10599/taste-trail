@@ -25,7 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { 
   Users, Search, Filter, MoreHorizontal, Shield, 
-  UserX, UserCheck, AlertTriangle, Crown, Building
+  UserX, UserCheck, AlertTriangle, Crown, Building, Loader2, RefreshCw
 } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -45,12 +45,18 @@ interface User {
     reports: number
     strikes: number
   }
+  moderationActions?: Array<{
+    type: string
+    reason: string
+    expiresAt: string | null
+    createdAt: string
+  }>
 }
 
 interface ModerationDialog {
   isOpen: boolean
   user: User | null
-  action: 'ban' | 'warn' | 'promote' | 'verify' | null
+  action: 'ban' | 'tempban' | 'unban' | 'warn' | 'promote' | 'verify' | null
 }
 
 export default function AdminUsersPage() {
@@ -67,6 +73,8 @@ export default function AdminUsersPage() {
     action: null
   })
   const [moderationReason, setModerationReason] = useState('')
+  const [banDuration, setBanDuration] = useState('7') // Default 7 days for tempban
+  const [moderatingUserId, setModeratingUserId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -114,35 +122,81 @@ export default function AdminUsersPage() {
   const handleModerationAction = async () => {
     if (!moderationDialog.user || !moderationDialog.action) return
 
+    const userId = moderationDialog.user.id
+    const action = moderationDialog.action
+    
+    setModeratingUserId(userId)
+    
     try {
       const token = localStorage.getItem('accessToken')
       
       await axios.post('/api/admin/moderation', {
-        userId: moderationDialog.user.id,
-        action: moderationDialog.action,
-        reason: moderationReason
+        userId: userId,
+        action: action,
+        reason: moderationReason,
+        duration: action === 'tempban' ? parseInt(banDuration) : undefined
       }, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
-      toast.success(`User ${moderationDialog.action} action completed`)
+      toast.success(`User ${action} action completed`)
       setModerationDialog({ isOpen: false, user: null, action: null })
       setModerationReason('')
-      fetchUsers() // Refresh the list
+      setBanDuration('7')
+      
+      // Optimistic UI update that persists until next manual refresh
+      setUsers(prevUsers => {
+        const updatedUsers = prevUsers.map(user => {
+          if (user.id === userId) {
+            if (action === 'ban' || action === 'tempban') {
+              // Add moderation action for ban
+              const updatedUser = {
+                ...user,
+                moderationActions: [{
+                  type: action === 'ban' ? 'PERMANENT_BAN' : 'TEMPORARY_BAN',
+                  reason: moderationReason,
+                  expiresAt: action === 'tempban' ? new Date(Date.now() + parseInt(banDuration) * 24 * 60 * 60 * 1000).toISOString() : null,
+                  createdAt: new Date().toISOString()
+                }]
+              }
+              console.log('Updated user after ban:', updatedUser)
+              return updatedUser
+            } else if (action === 'unban') {
+              // Clear moderation actions for unban
+              return {
+                ...user,
+                moderationActions: []
+              }
+            } else if (action === 'verify') {
+              return { ...user, verified: true }
+            }
+          }
+          return user
+        })
+        return updatedUsers
+      })
+      
+      // Clear loading state without refetching
+      setTimeout(() => {
+        setModeratingUserId(null)
+      }, 300)
     } catch (error) {
       console.error('Moderation action failed:', error)
       toast.error('Failed to perform moderation action')
+      setModeratingUserId(null)
     }
   }
 
-  const openModerationDialog = (user: User, action: 'ban' | 'warn' | 'promote' | 'verify') => {
+  const openModerationDialog = (user: User, action: 'ban' | 'tempban' | 'unban' | 'warn' | 'promote' | 'verify') => {
     setModerationDialog({ isOpen: true, user, action })
   }
 
 
   const getActionTitle = (action: string) => {
     switch (action) {
-      case 'ban': return 'Ban User'
+      case 'ban': return 'Ban User Permanently'
+      case 'tempban': return 'Temporary Ban'
+      case 'unban': return 'Unban User'
       case 'warn': return 'Warn User'
       case 'promote': return 'Promote User'
       case 'verify': return 'Verify User'
@@ -153,11 +207,37 @@ export default function AdminUsersPage() {
   const getActionDescription = (action: string) => {
     switch (action) {
       case 'ban': return 'This will permanently ban the user from the platform. They will not be able to log in or access any features.'
+      case 'tempban': return 'This will temporarily ban the user from the platform for the specified duration.'
+      case 'unban': return 'This will remove all active bans and reinstate the user account. They will be able to log in again.'
       case 'warn': return 'This will send a warning to the user about their behavior. Multiple warnings may result in suspension.'
       case 'promote': return 'This will promote the user to moderator role, giving them moderation privileges.'
       case 'verify': return 'This will verify the user account, giving them a verified badge.'
       default: return 'Please confirm this moderation action.'
     }
+  }
+
+  const getUserBanStatus = (user: User) => {
+    if (!user.moderationActions || user.moderationActions.length === 0) return null
+    
+    const activeBan = user.moderationActions[0] // We already filtered for active bans in the API
+    if (activeBan.type === 'PERMANENT_BAN') {
+      return { status: 'permanently banned', color: 'bg-red-100 text-red-700 border-red-200' }
+    } else if (activeBan.type === 'TEMPORARY_BAN') {
+      if (activeBan.expiresAt) {
+        const expiryDate = new Date(activeBan.expiresAt)
+        return { 
+          status: `banned until ${expiryDate.toLocaleDateString()}`, 
+          color: 'bg-orange-100 text-orange-700 border-orange-200' 
+        }
+      } else {
+        // Temporary ban without expiry date (shouldn't happen, but handle it)
+        return { 
+          status: 'temporarily banned', 
+          color: 'bg-orange-100 text-orange-700 border-orange-200' 
+        }
+      }
+    }
+    return null
   }
 
   if (loading && users.length === 0) {
@@ -178,11 +258,22 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-        <p className="text-gray-600 mt-2">
-          Manage users, roles, and account status
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+          <p className="text-gray-600 mt-2">
+            Manage users, roles, and account status
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchUsers()}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Filters */}
@@ -245,7 +336,17 @@ export default function AdminUsersPage() {
         <CardContent>
           <div className="space-y-4">
             {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+              <div 
+                key={user.id} 
+                className={`flex items-center justify-between p-4 border rounded-lg relative ${
+                  moderatingUserId === user.id ? 'opacity-60' : ''
+                }`}
+              >
+                {moderatingUserId === user.id && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10 rounded-lg">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                )}
                 <div className="flex items-center gap-4">
                   <Avatar
                     src={user.avatar}
@@ -258,6 +359,14 @@ export default function AdminUsersPage() {
                       <h3 className="font-semibold">{user.name}</h3>
                       {user.verified && <UserCheck className="h-4 w-4 text-green-500" />}
                       <UserBadge role={user.role} size="sm" className="show-user" />
+                      {(() => {
+                        const banStatus = getUserBanStatus(user)
+                        return banStatus ? (
+                          <Badge className={`text-xs ${banStatus.color}`}>
+                            {banStatus.status}
+                          </Badge>
+                        ) : null
+                      })()}
                     </div>
                     <p className="text-sm text-gray-600">{user.email}</p>
                     <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
@@ -275,43 +384,68 @@ export default function AdminUsersPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {!user.verified && (
+                  {getUserBanStatus(user) ? (
+                    // Show unban button for banned users
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => openModerationDialog(user, 'verify')}
+                      onClick={() => openModerationDialog(user, 'unban')}
+                      className="text-green-600 hover:text-green-700"
                     >
                       <UserCheck className="h-4 w-4 mr-1" />
-                      Verify
+                      Unban
                     </Button>
+                  ) : (
+                    // Show regular moderation buttons for non-banned users
+                    <>
+                      {!user.verified && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openModerationDialog(user, 'verify')}
+                        >
+                          <UserCheck className="h-4 w-4 mr-1" />
+                          Verify
+                        </Button>
+                      )}
+                      {user.role === 'USER' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openModerationDialog(user, 'promote')}
+                        >
+                          <Shield className="h-4 w-4 mr-1" />
+                          Promote
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openModerationDialog(user, 'warn')}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-1" />
+                        Warn
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openModerationDialog(user, 'tempban')}
+                        className="text-orange-600 hover:text-orange-700"
+                      >
+                        <UserX className="h-4 w-4 mr-1" />
+                        Temp Ban
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openModerationDialog(user, 'ban')}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <UserX className="h-4 w-4 mr-1" />
+                        Ban
+                      </Button>
+                    </>
                   )}
-                  {user.role === 'USER' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openModerationDialog(user, 'promote')}
-                    >
-                      <Shield className="h-4 w-4 mr-1" />
-                      Promote
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openModerationDialog(user, 'warn')}
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-1" />
-                    Warn
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openModerationDialog(user, 'ban')}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <UserX className="h-4 w-4 mr-1" />
-                    Ban
-                  </Button>
                 </div>
               </div>
             ))}
@@ -347,6 +481,7 @@ export default function AdminUsersPage() {
         if (!open) {
           setModerationDialog({ isOpen: false, user: null, action: null })
           setModerationReason('')
+          setBanDuration('7')
         }
       }}>
         <DialogContent>
@@ -368,6 +503,27 @@ export default function AdminUsersPage() {
                 className="mt-1"
               />
             </div>
+            {moderationDialog.action === 'tempban' && (
+              <div>
+                <label className="text-sm font-medium">Ban Duration (days)</label>
+                <Input
+                  type="number"
+                  value={banDuration}
+                  onChange={(e) => setBanDuration(e.target.value)}
+                  min="1"
+                  max="365"
+                  placeholder="Enter duration in days"
+                  className="mt-1"
+                />
+              </div>
+            )}
+            {moderationDialog.action === 'unban' && moderationDialog.user && getUserBanStatus(moderationDialog.user) && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  Current ban: <strong>{getUserBanStatus(moderationDialog.user)!.status}</strong>
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -378,8 +534,12 @@ export default function AdminUsersPage() {
             </Button>
             <Button
               onClick={handleModerationAction}
-              disabled={!moderationReason.trim()}
-              className={moderationDialog.action === 'ban' ? 'bg-red-600 hover:bg-red-700' : ''}
+              disabled={!moderationReason.trim() || (moderationDialog.action === 'tempban' && (!banDuration || parseInt(banDuration) < 1))}
+              className={
+                moderationDialog.action === 'ban' ? 'bg-red-600 hover:bg-red-700' : 
+                moderationDialog.action === 'tempban' ? 'bg-orange-600 hover:bg-orange-700' : 
+                moderationDialog.action === 'unban' ? 'bg-green-600 hover:bg-green-700' : ''
+              }
             >
               Confirm {moderationDialog.action && moderationDialog.action.charAt(0).toUpperCase() + moderationDialog.action.slice(1)}
             </Button>

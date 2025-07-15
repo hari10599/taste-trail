@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ReviewCard } from '@/components/ReviewCard'
 import { CommentSection } from '@/components/CommentSection'
 import { TimelineStats } from '@/components/TimelineStats'
+import { ReportDialog } from '@/components/ReportDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Loader2, TrendingUp, Star, Shield, Users, RefreshCw, LogIn } from 'lucide-react'
@@ -23,6 +24,11 @@ export default function TimelinePage() {
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
   const [likedReviews, setLikedReviews] = useState<Set<string>>(new Set())
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [reportDialog, setReportDialog] = useState<{ isOpen: boolean; targetId: string; targetType: 'review' | 'comment' | 'restaurant' | 'user'; targetName?: string }>({
+    isOpen: false,
+    targetId: '',
+    targetType: 'review'
+  })
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   
@@ -216,6 +222,33 @@ export default function TimelinePage() {
     ))
   }
   
+  const handleReport = (reviewId: string, reviewAuthor: string) => {
+    if (!isAuthenticated) {
+      toast(
+        <div>
+          <p>Please sign in to report content</p>
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" onClick={() => window.location.href = '/login'}>
+              Sign In
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => toast.dismiss()}>
+              Cancel
+            </Button>
+          </div>
+        </div>,
+        { duration: 5000 }
+      )
+      return
+    }
+    
+    setReportDialog({
+      isOpen: true,
+      targetId: reviewId,
+      targetType: 'review',
+      targetName: `${reviewAuthor}'s review`
+    })
+  }
+
   const handleShare = async (review: any) => {
     const url = `${window.location.origin}/restaurants/${review.restaurant.id}#review-${review.id}`
     
@@ -309,6 +342,7 @@ export default function TimelinePage() {
               onLike={() => handleLike(review.id)}
               onComment={() => handleComment(review.id)}
               onShare={() => handleShare(review)}
+              onReport={() => handleReport(review.id, review.user.name)}
             />
             
             {expandedComments.has(review.id) && (
@@ -352,6 +386,15 @@ export default function TimelinePage() {
           </>
         )}
       </div>
+
+      {/* Report Dialog */}
+      <ReportDialog
+        isOpen={reportDialog.isOpen}
+        onClose={() => setReportDialog({ ...reportDialog, isOpen: false })}
+        targetId={reportDialog.targetId}
+        targetType={reportDialog.targetType}
+        targetName={reportDialog.targetName}
+      />
     </div>
   )
 }

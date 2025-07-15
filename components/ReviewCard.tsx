@@ -46,6 +46,7 @@ interface ReviewCardProps {
   onShare?: () => void
   onEdit?: () => void
   onDelete?: () => void
+  onReport?: () => void
   showRestaurant?: boolean
 }
 
@@ -58,6 +59,7 @@ export function ReviewCard({
   onShare,
   onEdit,
   onDelete,
+  onReport,
   showRestaurant = true,
 }: ReviewCardProps) {
   const [showMenu, setShowMenu] = useState(false)
@@ -127,7 +129,13 @@ export function ReviewCard({
                     </>
                   )}
                   {!isOwner && (
-                    <button className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-100">
+                    <button 
+                      onClick={() => {
+                        setShowMenu(false)
+                        onReport?.()
+                      }}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-gray-100"
+                    >
                       <Flag className="h-4 w-4" />
                       Report Review
                     </button>

@@ -341,6 +341,39 @@ export async function cleanupOldNotifications(): Promise<void> {
 }
 
 /**
+ * Send welcome notification to new users or returning users
+ */
+export async function sendWelcomeNotification(userId: string, userName: string, isReturning: boolean = false): Promise<void> {
+  try {
+    const welcomeData = {
+      userName,
+      isReturning
+    }
+
+    if (isReturning) {
+      // Don't send welcome notification if user has logged in recently (within 7 days)
+      const recentLogin = await prisma.notification.findFirst({
+        where: {
+          userId,
+          type: 'welcome',
+          createdAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+          }
+        }
+      })
+
+      if (recentLogin) {
+        return // Skip welcome notification for recent users
+      }
+    }
+
+    await createNotification('welcome', userId, welcomeData)
+  } catch (error) {
+    console.error('Failed to send welcome notification:', error)
+  }
+}
+
+/**
  * SSE Connection Management
  */
 export function addSSEConnection(userId: string, response: any): void {

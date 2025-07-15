@@ -64,6 +64,24 @@ export async function POST(request: NextRequest) {
           expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000) // days to milliseconds
         }
         break
+      case 'unban':
+        moderationActionType = 'ACCOUNT_REINSTATEMENT'
+        // Expire all active bans
+        await prisma.moderationAction.updateMany({
+          where: {
+            targetId: userId,
+            targetType: 'user',
+            type: { in: ['PERMANENT_BAN', 'TEMPORARY_BAN'] },
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } }
+            ]
+          },
+          data: {
+            expiresAt: new Date() // Set expiry to now to deactivate
+          }
+        })
+        break
       case 'warn':
         moderationActionType = 'WARNING'
         break
@@ -115,12 +133,24 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // For bans, we need to invalidate all user sessions
+    if (action === 'ban' || action === 'tempban') {
+      await prisma.session.deleteMany({
+        where: { userId }
+      })
+    }
+
     // Create notification for the user
+    const notificationTitle = action === 'unban' ? 'Account Reinstated' : `Account ${action}`
+    const notificationMessage = action === 'unban' 
+      ? `Your account has been reinstated. ${reason}`
+      : `Your account has been ${action}ed. Reason: ${reason}`
+    
     await prisma.notification.create({
       data: {
         type: 'moderation_action',
-        title: `Account ${action}`,
-        message: `Your account has been ${action}ed. Reason: ${reason}`,
+        title: notificationTitle,
+        message: notificationMessage,
         userId: userId,
         fromId: payload.userId,
         data: {
@@ -180,10 +210,15 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit
 
     if (type === 'reports') {
-      // Fetch pending reports
+      const status = searchParams.get('status')
+      const whereClause = status && status !== 'all' 
+        ? { status: status.toUpperCase() }
+        : {}
+      
+      // Fetch reports
       const [reports, total] = await Promise.all([
         prisma.report.findMany({
-          where: { status: 'PENDING' },
+          where: whereClause,
           include: {
             reporter: {
               select: {
@@ -197,7 +232,7 @@ export async function GET(request: NextRequest) {
           skip,
           take: limit
         }),
-        prisma.report.count({ where: { status: 'PENDING' } })
+        prisma.report.count({ where: whereClause })
       ])
 
       return NextResponse.json({

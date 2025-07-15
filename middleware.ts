@@ -20,6 +20,26 @@ function decodeJWT(token: string) {
   }
 }
 
+// Check if user is banned (Edge Runtime compatible)
+async function checkUserBanStatus(userId: string): Promise<boolean> {
+  try {
+    // In Edge Runtime, we need to make an API call to check ban status
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/check-ban`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    })
+    
+    if (!response.ok) return false
+    
+    const data = await response.json()
+    return data.isBanned || false
+  } catch {
+    // If we can't check, allow access (fail open)
+    return false
+  }
+}
+
 // Routes that require authentication
 const protectedRoutes = ['/dashboard', '/profile', '/restaurants/new', '/reviews/new']
 const adminRoutes = ['/admin']
@@ -27,11 +47,11 @@ const ownerRoutes = ['/owner']
 // Routes that are always public
 const publicRoutes = ['/', '/restaurants', '/timeline']
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  // Skip middleware for login/register pages
-  if (pathname === '/login' || pathname === '/register') {
+  // Skip middleware for login/register pages and ban check API
+  if (pathname === '/login' || pathname === '/register' || pathname === '/api/auth/check-ban') {
     return NextResponse.next()
   }
   
@@ -57,6 +77,16 @@ export function middleware(request: NextRequest) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)
       return NextResponse.redirect(loginUrl)
+    }
+    
+    // Check if user is banned
+    const isBanned = await checkUserBanStatus(payload.userId)
+    if (isBanned) {
+      // Clear auth cookies and redirect to login with error
+      const response = NextResponse.redirect(new URL('/login?error=banned', request.url))
+      response.cookies.delete('accessToken')
+      response.cookies.delete('refreshToken')
+      return response
     }
     
     // Check role-based access

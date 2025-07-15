@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db/prisma'
 import { loginSchema } from '@/lib/auth/validation'
 import { generateAccessToken, generateRefreshToken, createSession } from '@/lib/auth/jwt'
+import { sendWelcomeNotification } from '@/lib/notifications'
+import { checkUserBan } from '@/lib/auth/ban-check'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,6 +35,26 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Check if user is banned
+    const activeBan = await checkUserBan(user.id)
+    if (activeBan) {
+      const banType = activeBan.type === 'PERMANENT_BAN' ? 'permanently banned' : 'temporarily banned'
+      const expiryInfo = activeBan.expiresAt ? ` until ${activeBan.expiresAt.toLocaleDateString()}` : ''
+      
+      return NextResponse.json(
+        { 
+          error: `Your account has been ${banType}${expiryInfo}. Reason: ${activeBan.reason}`,
+          banInfo: {
+            type: activeBan.type,
+            reason: activeBan.reason,
+            expiresAt: activeBan.expiresAt,
+            moderator: activeBan.moderator.name
+          }
+        },
+        { status: 403 }
+      )
+    }
     
     // Generate tokens
     const tokenPayload = {
@@ -49,12 +71,24 @@ export async function POST(request: NextRequest) {
     // Create session
     await createSession(user.id, refreshToken)
     
+    // Get unread notification count
+    const unreadNotificationCount = await prisma.notification.count({
+      where: { 
+        userId: user.id, 
+        read: false 
+      }
+    })
+
+    // Send welcome notification for returning users (not too frequent)
+    await sendWelcomeNotification(user.id, user.name, true)
+    
     // Return user data without password
     const { password: _, ...userWithoutPassword } = user
     
     const response = NextResponse.json({
       user: userWithoutPassword,
       accessToken,
+      unreadNotificationCount,
     })
     
     // Set access token as cookie for middleware

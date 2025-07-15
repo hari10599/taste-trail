@@ -99,34 +99,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       description: 'User management & roles'
     },
     {
-      label: 'Moderation',
-      icon: Shield,
-      href: '/admin/moderation',
-      description: 'Content moderation queue'
-    },
-    {
       label: 'Reports',
       icon: Flag,
       href: '/admin/reports',
       description: 'User reports & complaints'
-    },
-    {
-      label: 'Notifications',
-      icon: Bell,
-      href: '/admin/notifications',
-      description: 'System notifications & announcements'
-    },
-    {
-      label: 'Analytics',
-      icon: BarChart3,
-      href: '/admin/analytics',
-      description: 'Platform analytics & insights'
-    },
-    {
-      label: 'Content',
-      icon: FileText,
-      href: '/admin/content',
-      description: 'Restaurant & review management'
     }
   ]
 

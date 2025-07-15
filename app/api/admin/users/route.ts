@@ -105,8 +105,45 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where })
     ])
 
+    // Fetch moderation actions separately for each user
+    const userIds = users.map(u => u.id)
+    const moderationActions = await prisma.moderationAction.findMany({
+      where: {
+        targetId: { in: userIds },
+        targetType: 'user',
+        type: { in: ['PERMANENT_BAN', 'TEMPORARY_BAN'] },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        targetId: true,
+        type: true,
+        reason: true,
+        expiresAt: true,
+        createdAt: true
+      }
+    })
+
+    // Group moderation actions by user
+    const moderationActionsByUser = moderationActions.reduce((acc, action) => {
+      if (!acc[action.targetId]) {
+        acc[action.targetId] = []
+      }
+      acc[action.targetId].push(action)
+      return acc
+    }, {} as Record<string, typeof moderationActions>)
+
+    // Add moderation actions to users
+    const usersWithModerationActions = users.map(user => ({
+      ...user,
+      moderationActions: moderationActionsByUser[user.id] ? [moderationActionsByUser[user.id][0]] : []
+    }))
+
     return NextResponse.json({
-      users,
+      users: usersWithModerationActions,
       pagination: {
         page,
         limit,

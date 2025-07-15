@@ -40,6 +40,7 @@ export function NotificationBell() {
   const [isLoading, setIsLoading] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected')
+  const [initialConnectionMade, setInitialConnectionMade] = useState(false)
   
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -47,12 +48,38 @@ export function NotificationBell() {
   const maxReconnectAttempts = 5
   
   useEffect(() => {
-    fetchNotifications()
-    setupSSEConnection()
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      fetchNotifications()
+      setupSSEConnection()
+    }
     
     return () => {
       cleanup()
     }
+  }, [])
+
+  // Initialize unread count from login response
+  useEffect(() => {
+    const initializeFromLogin = () => {
+      const loginData = sessionStorage.getItem('loginNotificationData')
+      if (loginData) {
+        try {
+          const { unreadNotificationCount } = JSON.parse(loginData)
+          if (unreadNotificationCount !== undefined) {
+            setUnreadCount(unreadNotificationCount)
+          }
+          sessionStorage.removeItem('loginNotificationData')
+        } catch (error) {
+          console.error('Failed to parse login notification data:', error)
+        }
+      }
+    }
+
+    initializeFromLogin()
+    // Listen for storage events in case login happens in another tab
+    window.addEventListener('storage', initializeFromLogin)
+    return () => window.removeEventListener('storage', initializeFromLogin)
   }, [])
   
   const cleanup = () => {
@@ -129,19 +156,30 @@ export function NotificationBell() {
     switch (data.type) {
       case 'connected':
         console.log('SSE connection confirmed')
+        setInitialConnectionMade(true)
         break
         
       case 'notification':
         // Add new notification to the list
-        setNotifications(prev => [data.payload, ...prev.slice(0, 9)]) // Keep only 10 most recent
-        setUnreadCount(prev => prev + 1)
+        setNotifications(prev => {
+          // Avoid duplicates by checking if notification already exists
+          const exists = prev.some(n => n.id === data.payload.id)
+          if (exists) return prev
+          return [data.payload, ...prev.slice(0, 9)] // Keep only 10 most recent
+        })
         
-        // Show toast for important notifications
-        if (['like', 'comment', 'reply', 'new_review'].includes(data.payload.type)) {
-          toast.success(data.payload.title, {
-            duration: 4000,
-            icon: getNotificationIcon(data.payload.type)
-          })
+        // Only increment unread count and show toast for truly new notifications
+        // (not for initial batch sent on connection)
+        if (initialConnectionMade) {
+          setUnreadCount(prev => prev + 1)
+          
+          // Show toast for important notifications
+          if (['like', 'comment', 'reply', 'new_review'].includes(data.payload.type)) {
+            toast.success(data.payload.title, {
+              duration: 4000,
+              icon: getNotificationIcon(data.payload.type)
+            })
+          }
         }
         break
         
@@ -180,7 +218,7 @@ export function NotificationBell() {
     try {
       const token = localStorage.getItem('accessToken')
       await axios.put(
-        '/api/notifications/read',
+        '/api/notifications',
         { notificationIds },
         {
           headers: {
@@ -262,6 +300,13 @@ export function NotificationBell() {
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
+        {/* Connection status indicator */}
+        <span className={`absolute -bottom-1 -right-1 h-2 w-2 rounded-full ${
+          connectionStatus === 'connected' ? 'bg-green-500' :
+          connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+          connectionStatus === 'error' ? 'bg-red-500 animate-pulse' :
+          'bg-gray-400'
+        }`} />
       </Button>
       
       {isOpen && (
@@ -287,13 +332,32 @@ export function NotificationBell() {
                   </Button>
                 )}
               </div>
-              {connectionStatus !== 'connected' && (
-                <div className="text-xs text-gray-500 mt-1">
-                  {connectionStatus === 'connecting' && 'Connecting...'}
-                  {connectionStatus === 'disconnected' && 'Disconnected - using polling'}
-                  {connectionStatus === 'error' && 'Connection error - retrying...'}
-                </div>
-              )}
+              <div className="text-xs text-gray-500 mt-1">
+                {connectionStatus === 'connected' && (
+                  <span className="text-green-600 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 bg-green-500 rounded-full"></span>
+                    Real-time notifications active
+                  </span>
+                )}
+                {connectionStatus === 'connecting' && (
+                  <span className="text-yellow-600 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 bg-yellow-500 rounded-full animate-pulse"></span>
+                    Connecting to live updates...
+                  </span>
+                )}
+                {connectionStatus === 'disconnected' && (
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 bg-gray-400 rounded-full"></span>
+                    Using backup sync mode
+                  </span>
+                )}
+                {connectionStatus === 'error' && (
+                  <span className="text-red-600 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                    Retrying connection...
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0 overflow-y-auto max-h-[500px]">
               {notifications.length === 0 ? (

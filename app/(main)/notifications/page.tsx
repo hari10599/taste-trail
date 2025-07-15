@@ -152,7 +152,7 @@ export default function NotificationsPage() {
     try {
       const token = localStorage.getItem('accessToken')
       
-      await axios.put('/api/notifications/read', {
+      await axios.put('/api/notifications', {
         notificationIds
       }, {
         headers: { Authorization: `Bearer ${token}` }

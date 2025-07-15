@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, type LoginInput } from '@/lib/auth/validation'
@@ -10,14 +10,16 @@ import { setToken } from '@/lib/auth/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [banError, setBanError] = useState<string | null>(null)
 
   const {
     register,
@@ -26,6 +28,17 @@ export default function LoginPage() {
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
   })
+
+  useEffect(() => {
+    // Check for ban error from middleware redirect
+    const error = searchParams.get('error')
+    if (error === 'banned') {
+      setBanError('Your account has been banned. Please contact support for more information.')
+      // Clear cookies just in case
+      document.cookie = 'accessToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      document.cookie = 'refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    }
+  }, [searchParams])
 
   const onSubmit = async (data: LoginInput) => {
     setIsLoading(true)
@@ -37,6 +50,14 @@ export default function LoginPage() {
       // Store access token in localStorage as backup
       if (response.data.accessToken) {
         localStorage.setItem('accessToken', response.data.accessToken)
+      }
+      
+      // Store notification data for NotificationBell component
+      if (response.data.unreadNotificationCount !== undefined) {
+        sessionStorage.setItem('loginNotificationData', JSON.stringify({
+          unreadNotificationCount: response.data.unreadNotificationCount,
+          timestamp: new Date().toISOString()
+        }))
       }
       
       toast.success('Welcome back!')
@@ -67,6 +88,12 @@ export default function LoginPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {banError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700">{banError}</p>
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
             type="email"
