@@ -61,17 +61,17 @@ export function EditReviewDialog({ review, isOpen, onClose, onSuccess }: EditRev
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
         const formData = new FormData()
-        formData.append('file', file)
-        formData.append('type', 'review')
+        formData.append('files', file) // The API expects 'files' not 'file'
+        formData.append('folder', 'reviews')
         
-        const response = await axios.post('/api/upload', formData, {
+        const response = await axios.post('/api/media/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
           },
         })
         
-        return response.data.url
+        return response.data.uploads[0].url
       })
       
       const uploadedUrls = await Promise.all(uploadPromises)
